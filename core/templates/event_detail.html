@@ -1,0 +1,78 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ event.title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .liked {
+            color: red;
+        }
+        .unliked {
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+    <div class="text-center space-y-4">
+        <h1 class="text-3xl font-bold">{{ event.title }}</h1>
+
+        <!-- Like Button -->
+        <button id="like-button" class="text-4xl focus:outline-none">
+            <span id="heart" class="{% if user in event.likes.all %}liked{% else %}unliked{% endif %}">❤️</span>
+        </button>
+        
+        <!-- Like Count -->
+        <div>
+            <span id="like-count">{{ event.likes.count }}</span> like{{ event.likes.count|pluralize }}
+        </div>
+    </div>
+
+    <script>
+        const likeButton = document.getElementById("like-button");
+        const heart = document.getElementById("heart");
+        const likeCountElem = document.getElementById("like-count");
+        const eventId = {{ event.id }};
+        const userIsAuthenticated = {{ request.user.is_authenticated|yesno:"true,false" }};
+
+        likeButton.addEventListener('click', () => {
+            if (!userIsAuthenticated) {
+                alert("Please log in to like the event.");
+                return;
+            }
+
+            fetch("{% url 'toggle_like' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ event_id: eventId }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.liked) {
+                    heart.classList.remove('unliked');
+                    heart.classList.add('liked');
+                } else {
+                    heart.classList.remove('liked');
+                    heart.classList.add('unliked');
+                }
+                likeCountElem.textContent = data.total_likes;
+            });
+        });
+
+        // WebSocket for real-time updates
+        const ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const socket = new WebSocket(`${ws_scheme}://${window.location.host}/ws/event/${eventId}/`);
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if (data.type === 'like_update') {
+                likeCountElem.textContent = data.total_likes;
+            }
+        };
+    </script>
+</body>
+</html>

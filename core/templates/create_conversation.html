@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Schedule Conversation</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .form-container {
+            background-color: #111;
+            padding: 2rem;
+            border: 1px solid #fff;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-top: 1rem;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.6rem;
+            margin-top: 0.4rem;
+            border: 1px solid #fff;
+            background: transparent;
+            color: #fff;
+            border-radius: 5px;
+        }
+
+        button {
+            margin-top: 1.5rem;
+            width: 100%;
+            padding: 0.7rem;
+            background-color: #fff;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 1rem;
+            color: #0f0;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>💬 Schedule a Conversation</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.title.label_tag }} {{ form.title }}
+            {{ form.description.label_tag }} {{ form.description }}
+            {{ form.start_time.label_tag }} {{ form.start_time }}
+
+            <input type="hidden" name="is_live" value="False">
+
+            <button type="submit">Create Conversation</button>
+        </form>
+        <a href="{% url 'organizer_dashboard' %}">⬅ Back to Dashboard</a>
+    </div>
+</body>
+</html>

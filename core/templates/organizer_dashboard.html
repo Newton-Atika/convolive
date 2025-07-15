@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Organizer Dashboard</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background-color: #111;
+            border-bottom: 2px solid #fff;
+        }
+
+        .navbar h1 {
+            font-size: 1.5rem;
+            margin: 0;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .action-card {
+            flex: 1 1 200px;
+            background-color: #111;
+            border: 1px solid #fff;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .action-card:hover {
+            transform: scale(1.03);
+            background-color: #222;
+        }
+
+        .action-card h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .stat-box {
+            flex: 1 1 180px;
+            background-color: #111;
+            border: 1px solid #fff;
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-box h3 {
+            margin: 0 0 0.5rem;
+            font-size: 1rem;
+            color: #999;
+        }
+
+        .stat-box p {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            .action-card, .stat-box {
+                flex: 1 1 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>🎙 Organizer Dashboard</h1>
+        <div>
+            <a href="{% url 'landing' %}" style="color: #0f0; text-decoration: underline;">Home</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <a href="{% url 'create_event' %}" style="text-decoration: none;">
+            <div class="action-card">
+                <h2>🎥 Create a Live</h2>
+                <p>Host your next live event</p>
+            </div>
+        </a>
+        <a href="{% url 'create_conversation' %}" style="text-decoration: none;">
+            <div class="action-card">
+                <h2>💬 Create a Conversation</h2>
+                <p>Start an interactive talk</p>
+            </div>
+        </a>
+
+        <div class="stats">
+            <div class="stat-box">
+                <h3>Total Events</h3>
+                <p>{{ my_events|length }}</p>
+            </div>
+            <div class="stat-box">
+                <h3>🎁 Gift Revenue</h3>
+                <p>{{ total_gift_revenue }} KES</p>
+            </div>
+            <div class="stat-box">
+                <h3>💰 Join Revenue</h3>
+                <p>{{ total_join_revenue }} KES</p>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 2rem;">📊 Revenue Per Event</h2>
+        <div class="stats">
+            {% for event in my_events %}
+                <div class="stat-box">
+                    <h3>{{ event.title }}</h3>
+                    <p><strong>Gifts:</strong> {{ event.get_gift_revenue }} KES</p>
+                    <p><strong>Joins:</strong> {{ event.get_join_revenue }} KES</p>
+                    <p><strong>Total:</strong> {{ event.get_total_revenue }} KES</p>
+                </div>
+            {% empty %}
+                <p>You have not created any events yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

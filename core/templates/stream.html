@@ -1,0 +1,82 @@
+<!-- core/templates/core/stream.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Stream: {{ event.title }}</title>
+    <style>
+        #chat-container {
+            width: 300px;
+            height: 400px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        #chat-messages {
+            height: 320px;
+            overflow-y: scroll;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #chat-input {
+            width: 80%;
+            padding: 5px;
+        }
+        #chat-send {
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Stream: {{ event.title }}</h1>
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" placeholder="Type your message...">
+        <button id="chat-send">Send</button>
+    </div>
+
+    <script>
+        const eventId = "{{ event.id|escapejs }}";
+        const user = "{{ request.user.username|escapejs }}";
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/' + eventId + '/'
+        );
+
+        chatSocket.onmessage = function(e) {
+            console.log('Message received:', e.data); // Debug log
+            const data = JSON.parse(e.data);
+            const messageElement = document.createElement('p');
+            messageElement.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+            document.querySelector('#chat-messages').appendChild(messageElement);
+            document.querySelector('#chat-messages').scrollTop = document.querySelector('#chat-messages').scrollHeight;
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly:', e);
+        };
+
+        chatSocket.onerror = function(e) {
+            console.error('WebSocket error:', e);
+        };
+
+        document.querySelector('#chat-send').onclick = function() {
+            const messageInput = document.querySelector('#chat-input');
+            const message = messageInput.value;
+            console.log('Sending message:', message); // Debug log
+            if (message.trim()) {
+                chatSocket.send(JSON.stringify({
+                    'message': message
+                }));
+                messageInput.value = '';
+            }
+        };
+
+        document.querySelector('#chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.querySelector('#chat-send').click();
+            }
+        });
+    </script>
+</body>
+</html>

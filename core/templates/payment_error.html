@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Error</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            padding-top: 50px;
+        }
+
+        .error-box {
+            border: 2px solid red;
+            padding: 2rem;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: auto;
+            background-color: #222;
+        }
+
+        a {
+            color: lime;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="error-box">
+        <h1>❌ Payment Failed</h1>
+        <p>{{ error }}</p>
+
+        {% if event %}
+            <p><a href="{% url 'event_detail' event_id=event.id %}">Go back to the event</a></p>
+        {% else %}
+            <p><a href="{% url 'landing' %}">Go back to homepage</a></p>
+        {% endif %}
+    </div>
+
+</body>
+</html>

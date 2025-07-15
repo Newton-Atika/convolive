@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Organizers</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 2rem;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        form {
+            max-width: 500px;
+            margin: auto;
+            background-color: #111;
+            padding: 2rem;
+            border: 1px solid #fff;
+            border-radius: 10px;
+        }
+
+        .user-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .user-entry:last-child {
+            border-bottom: none;
+        }
+
+        button {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.6rem;
+            background-color: #fff;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        label {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Promote Users to Organizers</h1>
+
+    <form method="POST">
+        {% csrf_token %}
+        {% for user in users %}
+            <div class="user-entry">
+                <label>{{ user.username }}</label>
+                <input type="checkbox" name="organizers" value="{{ user.id }}" {% if user.profile.is_organizer %}checked{% endif %}>
+            </div>
+        {% empty %}
+            <p>No users available.</p>
+        {% endfor %}
+        <button type="submit">Save Organizer Roles</button>
+    </form>
+</body>
+</html>

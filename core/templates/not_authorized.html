@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Not Authorized</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #f00;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>🚫 Access Denied</h1>
+        <p>You are not authorized to access the organizer dashboard.</p>
+        <a href="{% url 'landing' %}" style="color: #0f0;">Return to Homepage</a>
+    </div>
+</body>
+</html>

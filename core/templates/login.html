@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .form-box {
+            background-color: #111;
+            padding: 2rem;
+            border: 1px solid #fff;
+            border-radius: 10px;
+            width: 320px;
+        }
+
+        .form-box h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .form-box input {
+            width: 100%;
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            border: 1px solid #fff;
+            background: transparent;
+            color: #fff;
+            border-radius: 5px;
+        }
+
+        .form-box button {
+            width: 100%;
+            padding: 0.6rem;
+            background-color: #fff;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .errorlist {
+            color: red;
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .redirect-link {
+            text-align: center;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .redirect-link a {
+            color: #0f0;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="form-box">
+    <h2>Login</h2>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            {{ field.label_tag }}
+            {{ field }}
+            {% for error in field.errors %}
+                <div class="errorlist">{{ error }}</div>
+            {% endfor %}
+        {% endfor %}
+        <button type="submit">Login</button>
+
+        <div class="redirect-link">
+            Don't have an account? <a href="{% url 'signup' %}">Sign up here</a>
+        </div>
+    </form>
+</div>
+</body>
+</html>
