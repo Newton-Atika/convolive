@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-g=f3-is1f0vna5%1a3)is1b(w4h7ioxkek4-#c0=onblky+t@n
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["web-production-816d1.up.railway.app"]
 
 ASGI_APPLICATION = "convolive.asgi.application"
 
