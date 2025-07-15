@@ -92,7 +92,7 @@ WSGI_APPLICATION = 'convolive.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db()
+    'default': "postgresql://postgres:iRKZgJSxmsqZmkROoPDFVsYfxfmDAtvd@postgres.railway.internal:5432/railway"
 }
 
 
