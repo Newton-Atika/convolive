@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
-
+import dj_database_url
 from pathlib import Path
 import os
 import environ
@@ -92,7 +92,9 @@ WSGI_APPLICATION = 'convolive.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    'default': "postgresql://postgres:iRKZgJSxmsqZmkROoPDFVsYfxfmDAtvd@postgres.railway.internal:5432/railway"
+    'default': dj_database_url.parse(
+        'postgres://postgres:iRKZgJSxmsqZmkROoPDFVsYfxfmDAtvd@postgres.railway.internal:5432/railway'
+    )
 }
 
 
