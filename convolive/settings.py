@@ -82,6 +82,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'convolive.wsgi.application'
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-production-816d1.up.railway.app',
+]
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
