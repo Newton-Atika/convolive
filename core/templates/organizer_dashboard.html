@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Organizer Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             background-color: #000;
@@ -19,6 +20,7 @@
             padding: 1rem 2rem;
             background-color: #111;
             border-bottom: 2px solid #fff;
+            flex-wrap: wrap;
         }
 
         .navbar h1 {
@@ -87,8 +89,26 @@
         }
 
         @media (max-width: 600px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
             .action-card, .stat-box {
                 flex: 1 1 100%;
+            }
+
+            .content {
+                padding: 1rem;
+            }
+
+            .action-card {
+                padding: 1.5rem;
+            }
+
+            .stat-box {
+                padding: 1rem;
             }
         }
     </style>
