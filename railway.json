@@ -4,6 +4,6 @@
     "buildCommand": "docker build -t myapp ."
   },
   "start": {
-    "startCommand": "daphne -b 0.0.0.0 -p $PORT convolive.asgi:application"
+    "command": "daphne -b 0.0.0.0 -p $PORT convolive.asgi:application"
   }
 }
