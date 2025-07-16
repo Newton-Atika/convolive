@@ -1,1 +1,1 @@
-daphne -b 0.0.0.0 -p $8000 convolive.asgi:application
+web: daphne -b 0.0.0.0 -p $PORT convolive.asgi:application
