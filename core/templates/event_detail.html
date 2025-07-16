@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ event.title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .liked {
@@ -14,17 +15,17 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
-    <div class="text-center space-y-4">
-        <h1 class="text-3xl font-bold">{{ event.title }}</h1>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md text-center space-y-6">
+        <h1 class="text-2xl sm:text-3xl font-bold break-words">{{ event.title }}</h1>
 
         <!-- Like Button -->
-        <button id="like-button" class="text-4xl focus:outline-none">
+        <button id="like-button" class="text-5xl sm:text-6xl focus:outline-none">
             <span id="heart" class="{% if user in event.likes.all %}liked{% else %}unliked{% endif %}">❤️</span>
         </button>
         
         <!-- Like Count -->
-        <div>
+        <div class="text-lg sm:text-xl">
             <span id="like-count">{{ event.likes.count }}</span> like{{ event.likes.count|pluralize }}
         </div>
     </div>
