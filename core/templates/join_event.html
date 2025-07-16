@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ event.title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             background-color: #000;
@@ -79,7 +80,6 @@
             margin-bottom: 1rem;
         }
 
-        /* Floating gift animation - updated to 4s */
         .float-emoji {
             position: fixed;
             bottom: 80px;
@@ -99,6 +99,44 @@
             100% {
                 opacity: 0;
                 transform: translateX(-50%) translateY(-250px);
+            }
+        }
+
+        /* ✅ Responsive styles */
+        @media (max-width: 600px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            input {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            button, select {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            #sendBtn, #leaveChatBtn, #sendGiftBtn, #likeBtn {
+                font-size: 1rem;
+            }
+
+            .chat {
+                padding: 0.5rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+                text-align: center;
+            }
+
+            .video-box {
+                padding: 0.5rem;
+            }
+
+            .viewer-count ul {
+                padding-left: 1rem;
             }
         }
     </style>
