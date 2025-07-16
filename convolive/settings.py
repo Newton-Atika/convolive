@@ -87,10 +87,9 @@ WSGI_APPLICATION = 'convolive.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    'default': dj_database_url.parse(
-        'postgres://postgres:iRKZgJSxmsqZmkROoPDFVsYfxfmDAtvd@postgres.railway.internal:5432/railway'
-    )
+    'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'))
 }
+
 
 
 # Password validation
