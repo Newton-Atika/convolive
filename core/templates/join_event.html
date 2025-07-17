@@ -175,7 +175,12 @@ const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${even
 const streamSocket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${eventId}/`);
 
 let liked = false;
-let localMicStream = null;
+let localMicStream = null;   // For mic granted viewers
+let localStream = null;      // Organizer's camera+mic stream
+const peerConnections = {};  // organizer: viewerId→pc; viewer: 'organizer'→pc
+
+// STUN servers for WebRTC NAT traversal
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 function floatEmoji(content) {
   const el = document.createElement("div");
@@ -194,13 +199,156 @@ function giftLabel(value) {
   }
 }
 
+// --- ORGANIZER: Start local camera+mic and notify live started ---
+async function startOrganizerStream() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) localVideo.srcObject = localStream;
+
+    // Notify backend/viewers live started
+    likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
+    streamSocket.send(JSON.stringify({ type: "stream_start", event_id: eventId }));
+  } catch {
+    alert("Unable to access your camera/microphone.");
+  }
+}
+
+// --- ORGANIZER: Handle viewer's WebRTC offer ---
+async function handleViewerOffer(viewerId, offer) {
+  console.log(`Organizer got offer from viewer ${viewerId}`);
+  const pc = new RTCPeerConnection(iceServers);
+
+  // Add local organizer tracks (camera+mic) to send
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  // Send ICE candidates to viewer
+  pc.onicecandidate = event => {
+    if (event.candidate) {
+      streamSocket.send(JSON.stringify({
+        type: "organizer_ice",
+        candidate: event.candidate,
+        target: viewerId
+      }));
+    }
+  };
+
+  // Cleanup on disconnect
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+      pc.close();
+      delete peerConnections[viewerId];
+      console.log(`Peer with viewer ${viewerId} closed`);
+    }
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  peerConnections[viewerId] = pc;
+
+  // Send answer back to viewer
+  streamSocket.send(JSON.stringify({
+    type: "organizer_answer",
+    answer: pc.localDescription,
+    target: viewerId
+  }));
+}
+
+// --- ORGANIZER: Add ICE candidate from viewer ---
+function handleViewerIce(viewerId, candidate) {
+  const pc = peerConnections[viewerId];
+  if (pc) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+}
+
+// --- VIEWER: Start peer connection and send offer to organizer ---
+async function startViewerStream() {
+  const pc = new RTCPeerConnection(iceServers);
+  peerConnections["organizer"] = pc;
+
+  // Send ICE candidates to organizer
+  pc.onicecandidate = event => {
+    if (event.candidate) {
+      streamSocket.send(JSON.stringify({
+        type: "viewer_ice",
+        candidate: event.candidate,
+        viewer_id: user
+      }));
+    }
+  };
+
+  // When organizer's stream arrives, show it
+  pc.ontrack = event => {
+    const viewerVideo = document.getElementById("viewerStream");
+    if (viewerVideo.srcObject !== event.streams[0]) {
+      viewerVideo.srcObject = event.streams[0];
+      viewerVideo.style.display = "block";
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  streamSocket.send(JSON.stringify({
+    type: "viewer_offer",
+    offer: pc.localDescription,
+    viewer_id: user
+  }));
+}
+
+// --- VIEWER: Handle answer from organizer ---
+async function handleOrganizerAnswer(answer) {
+  const pc = peerConnections["organizer"];
+  if (!pc) return console.error("No organizer peer connection");
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+}
+
+// --- VIEWER: Add ICE candidate from organizer ---
+function handleOrganizerIce(candidate) {
+  const pc = peerConnections["organizer"];
+  if (!pc) return console.error("No organizer peer connection");
+  pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+}
+
+// --- WEBSOCKET HANDLERS ---
+
+streamSocket.onopen = () => {
+  console.log("Stream socket connected");
+  if (isOrganizer) startOrganizerStream();
+};
+
+streamSocket.onmessage = async event => {
+  const data = JSON.parse(event.data);
+  console.log("Stream message:", data);
+
+  if (data.type === "viewer_offer" && isOrganizer) {
+    await handleViewerOffer(data.viewer_id, data.offer);
+  } else if (data.type === "organizer_answer" && !isOrganizer) {
+    await handleOrganizerAnswer(data.answer);
+  } else if (data.type === "viewer_ice" && isOrganizer) {
+    handleViewerIce(data.viewer_id, data.candidate);
+  } else if (data.type === "organizer_ice" && !isOrganizer) {
+    handleOrganizerIce(data.candidate);
+  } else if (data.type === "live_started" && !isOrganizer) {
+    startViewerStream();
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
+  }
+};
+
+streamSocket.onclose = () => console.warn("Stream socket closed");
+streamSocket.onerror = e => console.error("Stream socket error", e);
+
 chatSocket.onmessage = event => {
   const data = JSON.parse(event.data);
+
   if (data.type === "chat") {
     const p = document.createElement("p");
     p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-    document.getElementById("chatArea").appendChild(p);
-    document.getElementById("chatArea").scrollTop = document.getElementById("chatArea").scrollHeight;
+    const chatArea = document.getElementById("chatArea");
+    chatArea.appendChild(p);
+    chatArea.scrollTop = chatArea.scrollHeight;
   } else if (data.type === "mic_request" && isOrganizer) {
     const li = document.createElement("li");
     li.id = `mic-${data.username}`;
@@ -216,7 +364,7 @@ chatSocket.onmessage = event => {
         video.srcObject = stream;
         video.style.display = "block";
         floatEmoji("🎤 You are live!");
-      });
+      }).catch(() => alert("Could not access microphone."));
     } else {
       const el = document.getElementById(`mic-${data.username}`);
       if (el) el.remove();
@@ -250,14 +398,6 @@ likeSocket.onmessage = event => {
     if (placeholder) placeholder.remove();
   }
 };
-
-streamSocket.onopen = () => console.log("Stream socket ▸ connected");
-streamSocket.onmessage = event => {
-  const data = JSON.parse(event.data);
-  console.log("Stream socket ➜", data);
-};
-streamSocket.onclose = () => console.warn("Stream socket closed");
-streamSocket.onerror = e => console.error("Stream socket error", e);
 
 document.getElementById("sendBtn").onclick = () => {
   const msg = document.getElementById("messageInput").value.trim();
@@ -299,16 +439,8 @@ if (micBtn) {
     micBtn.disabled = true;
   };
 }
-
-if (isOrganizer) {
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-      document.getElementById("localVideo").srcObject = stream;
-      likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-      streamSocket.send(JSON.stringify({ type: "stream_start", event_id: eventId }));
-    }).catch(() => alert("Unable to access your camera/microphone."));
-}
 </script>
+
 
 </body>
 </html>
