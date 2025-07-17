@@ -1,211 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>{{ event.title }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            background-color: #000;
-            color: #fff;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        .container {
-            max-width: 900px;
-            margin: auto;
-            padding: 1rem;
-        }
-
-        .video-box {
-            width: 100%;
-            background-color: #111;
-            padding: 1rem;
-            border-radius: 8px;
-            text-align: center;
-            border: 2px solid #333;
-            margin-bottom: 1rem;
-        }
-
-        #localVideo, #viewerStream {
-            width: 100%;
-            border-radius: 10px;
-            border: 2px solid limegreen;
-        }
-
-        .chat {
-            background-color: #111;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 1rem;
-        }
-
-        input, select, button {
-            padding: 0.5rem;
-            border: none;
-            border-radius: 5px;
-            margin: 0.2rem;
-        }
-
-        input {
-            width: 70%;
-            background-color: #222;
-            color: #fff;
-        }
-
-        #sendBtn {
-            background-color: limegreen;
-            color: #000;
-            font-weight: bold;
-        }
-
-        #likeBtn {
-            background-color: red;
-            color: #fff;
-        }
-
-        #leaveChatBtn {
-            background-color: #444;
-            color: #fff;
-            font-weight: bold;
-        }
-
-        #sendGiftBtn {
-            background-color: orange;
-            color: #000;
-            font-weight: bold;
-        }
-
-        .viewer-count {
-            margin-bottom: 1rem;
-        }
-
-        .float-emoji {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 2rem;
-            animation: floatUp 4s ease-out forwards;
-            z-index: 9999;
-            pointer-events: none;
-        }
-
-        @keyframes floatUp {
-            0% {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-            100% {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-250px);
-            }
-        }
-
-        /* ✅ Responsive styles */
-        @media (max-width: 600px) {
-            .container {
-                padding: 0.5rem;
-            }
-
-            input {
-                width: 100%;
-                margin-bottom: 0.5rem;
-            }
-
-            button, select {
-                width: 100%;
-                margin-bottom: 0.5rem;
-            }
-
-            #sendBtn, #leaveChatBtn, #sendGiftBtn, #likeBtn {
-                font-size: 1rem;
-            }
-
-            .chat {
-                padding: 0.5rem;
-            }
-
-            h1 {
-                font-size: 1.5rem;
-                text-align: center;
-            }
-
-            .video-box {
-                padding: 0.5rem;
-            }
-
-            .viewer-count ul {
-                padding-left: 1rem;
-            }
-        }
-    </style>
-    </style>
+  <meta charset="UTF-8">
+  <title>{{ event.title }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 1rem;
+    }
+    .video-box {
+      width: 100%;
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 2px solid #333;
+      margin-bottom: 1rem;
+    }
+    #localVideo, #viewerStream {
+      width: 100%;
+      border-radius: 10px;
+      border: 2px solid limegreen;
+    }
+    .chat {
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+    input, select, button {
+      padding: 0.5rem;
+      border: none;
+      border-radius: 5px;
+      margin: 0.2rem;
+    }
+    input {
+      width: 70%;
+      background-color: #222;
+      color: #fff;
+    }
+    #sendBtn {
+      background-color: limegreen;
+      color: #000;
+      font-weight: bold;
+    }
+    #likeBtn {
+      background-color: red;
+      color: #fff;
+    }
+    #leaveChatBtn {
+      background-color: #444;
+      color: #fff;
+      font-weight: bold;
+    }
+    #sendGiftBtn {
+      background-color: orange;
+      color: #000;
+      font-weight: bold;
+    }
+    .viewer-count {
+      margin-bottom: 1rem;
+    }
+    .float-emoji {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 2rem;
+      animation: floatUp 4s ease-out forwards;
+      z-index: 9999;
+      pointer-events: none;
+    }
+    @keyframes floatUp {
+      0% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-250px);
+      }
+    }
+    @media (max-width: 600px) {
+      .container { padding: 0.5rem; }
+      input { width: 100%; margin-bottom: 0.5rem; }
+      button, select { width: 100%; margin-bottom: 0.5rem; }
+      #sendBtn, #leaveChatBtn, #sendGiftBtn, #likeBtn { font-size: 1rem; }
+      .chat { padding: 0.5rem; }
+      h1 { font-size: 1.5rem; text-align: center; }
+      .video-box { padding: 0.5rem; }
+      .viewer-count ul { padding-left: 1rem; }
+    }
+  </style>
 </head>
 <body>
 
 {% if not event.is_live and not user_has_paid %}
-    <div class="payment-warning">
-        ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
-        <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
-    </div>
+  <div class="payment-warning">
+    ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
+    <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
+  </div>
 {% else %}
-
 <div class="container">
-    <h1>🎥 {{ event.title }}</h1>
+  <h1>🎥 {{ event.title }}</h1>
 
-    <div class="video-box">
-        {% if user.pk == event.organizer.pk %}
-            <video id="localVideo" autoplay muted></video>
-            <form method="post" action="{% url 'end_event' event.id %}">
-                {% csrf_token %}
-                <button type="submit" class="end-live-btn">🔴 End Live</button>
-            </form>
-        {% else %}
-            <div id="videoPlaceholder">🔒 Waiting for organizer’s live video...</div>
-            <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
-            <video id="viewerStream" autoplay muted style="display:none;margin-top:10px;"></video>
-        {% endif %}
-    </div>
-
-    <!-- Viewer count section -->
-    <div class="viewer-count">
-        {% if user.pk == event.organizer.pk and participants %}
-            👁️ Viewers: {{ participants|length }}
-            <div><strong>Joined Participants:</strong>
-                <ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul>
-            </div>
-        {% else %}
-            👁️ Viewers: {{ participant_count }}
-        {% endif %}
-    </div>
-
+  <div class="video-box">
     {% if user.pk == event.organizer.pk %}
-        <div id="micRequests">
-            <h3>🎤 Mic Requests</h3>
-            <ul id="requestList"></ul>
-        </div>
+      <video id="localVideo" autoplay muted playsinline></video>
+      <form method="post" action="{% url 'end_event' event.id %}">
+        {% csrf_token %}
+        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
+      </form>
+    {% else %}
+      <div id="videoPlaceholder">🔒 Waiting for organizer’s live video...</div>
+      <video id="viewerStream" autoplay muted style="display:none;margin-top:10px;"></video>
+      <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
     {% endif %}
+  </div>
 
-    <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
+  <div class="viewer-count">
+    {% if user.pk == event.organizer.pk and participants %}
+      👁️ Viewers: {{ participants|length }}
+      <div><strong>Joined Participants:</strong>
+        <ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul>
+      </div>
+    {% else %}
+      👁️ Viewers: {{ participant_count }}
+    {% endif %}
+  </div>
 
-    <div class="chat">
-        <div id="chatArea"></div>
-        <input type="text" id="messageInput" placeholder="Type message...">
-        <button id="sendBtn">Send</button>
-        <button id="leaveChatBtn">Leave Chat</button>
-
-        <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
-            {% csrf_token %}
-            <select name="amount" id="giftType">
-                <option value="10">🌹 Rose (10 KES)</option>
-                <option value="20">🍫 Chocolate (20 KES)</option>
-                <option value="50">⭐ Star (50 KES)</option>
-            </select>
-            <button type="submit" id="sendGiftBtn">Send Gift</button>
-        </form>
+  {% if user.pk == event.organizer.pk %}
+    <div id="micRequests">
+      <h3>🎤 Mic Requests</h3>
+      <ul id="requestList"></ul>
     </div>
-</div>
+  {% endif %}
 
+  <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
+
+  <div class="chat">
+    <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
+    <input type="text" id="messageInput" placeholder="Type message...">
+    <button id="sendBtn">Send</button>
+    <button id="leaveChatBtn">Leave Chat</button>
+
+    <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
+      {% csrf_token %}
+      <select name="amount" id="giftType">
+        <option value="10">🌹 Rose (10 KES)</option>
+        <option value="20">🍫 Chocolate (20 KES)</option>
+        <option value="50">⭐ Star (50 KES)</option>
+      </select>
+      <button type="submit" id="sendGiftBtn">Send Gift</button>
+    </form>
+  </div>
+</div>
 {% endif %}
 
 <script>
@@ -222,147 +178,135 @@ let liked = false;
 let localMicStream = null;
 
 function floatEmoji(content) {
-    const el = document.createElement("div");
-    el.className = "float-emoji";
-    el.innerText = content;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+  const el = document.createElement("div");
+  el.className = "float-emoji";
+  el.innerText = content;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
 }
 
 function giftLabel(value) {
-    switch (value) {
-        case "10": return "🌹 Coin x10";
-        case "20": return "🍫 Coin x20";
-        case "50": return "⭐ Coin x50";
-        default: return `🎁 Coin x${value}`;
-    }
+  switch (value) {
+    case "10": return "🌹 Coin x10";
+    case "20": return "🍫 Coin x20";
+    case "50": return "⭐ Coin x50";
+    default: return `🎁 Coin x${value}`;
+  }
 }
 
 chatSocket.onmessage = event => {
-    const data = JSON.parse(event.data);
-    if (data.type === "chat") {
-        const p = document.createElement("p");
-        p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-        document.getElementById("chatArea").appendChild(p);
-        document.getElementById("chatArea").scrollTop = document.getElementById("chatArea").scrollHeight;
-
-    } else if (data.type === "mic_request" && isOrganizer) {
-        const li = document.createElement("li");
-        li.id = `mic-${data.username}`;
-        li.innerHTML = `${data.username} wants to speak
-            <button onclick="approveMic('${data.username}')">✅ Approve</button>
-            <button onclick="denyMic('${data.username}')">❌ Deny</button>`;
-        document.getElementById("requestList").appendChild(li);
-
-    } else if (data.type === "mic_approved") {
-        if (!isOrganizer && data.username === user) {
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
-                localMicStream = stream;
-                const video = document.getElementById("viewerStream");
-                video.srcObject = stream;
-                video.style.display = "block";
-                floatEmoji("🎤 You are live!");
-            });
-        } else {
-            const el = document.getElementById(`mic-${data.username}`);
-            if (el) el.remove();
-        }
-
-    } else if (data.type === "mic_denied") {
-        if (data.username === user) alert("❌ Your mic request was denied.");
-        else {
-            const el = document.getElementById(`mic-${data.username}`);
-            if (el) el.remove();
-        }
-
-    } else if (data.type === "mic_revoked" && data.username === user) {
-        if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
-        document.getElementById("viewerStream").style.display = "none";
-        alert("🔇 Your mic access was revoked.");
+  const data = JSON.parse(event.data);
+  if (data.type === "chat") {
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+    document.getElementById("chatArea").appendChild(p);
+    document.getElementById("chatArea").scrollTop = document.getElementById("chatArea").scrollHeight;
+  } else if (data.type === "mic_request" && isOrganizer) {
+    const li = document.createElement("li");
+    li.id = `mic-${data.username}`;
+    li.innerHTML = `${data.username} wants to speak
+      <button onclick="approveMic('${data.username}')">✅ Approve</button>
+      <button onclick="denyMic('${data.username}')">❌ Deny</button>`;
+    document.getElementById("requestList").appendChild(li);
+  } else if (data.type === "mic_approved") {
+    if (!isOrganizer && data.username === user) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        localMicStream = stream;
+        const video = document.getElementById("viewerStream");
+        video.srcObject = stream;
+        video.style.display = "block";
+        floatEmoji("🎤 You are live!");
+      });
+    } else {
+      const el = document.getElementById(`mic-${data.username}`);
+      if (el) el.remove();
     }
+  } else if (data.type === "mic_denied") {
+    if (data.username === user) alert("❌ Your mic request was denied.");
+    else {
+      const el = document.getElementById(`mic-${data.username}`);
+      if (el) el.remove();
+    }
+  } else if (data.type === "mic_revoked" && data.username === user) {
+    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+    document.getElementById("viewerStream").style.display = "none";
+    alert("🔇 Your mic access was revoked.");
+  }
 };
 
 likeSocket.onmessage = event => {
-    const data = JSON.parse(event.data);
-    if (data.type === "like_update") {
-        document.getElementById("likeCount").innerText = data.total_likes;
-        floatEmoji("❤️");
-
-    } else if (data.type === "gift") {
-        const p = document.createElement("p");
-        p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
-        p.style.color = "orange";
-        document.getElementById("chatArea").appendChild(p);
-        floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
-
-    } else if (data.type === "live_started") {
-        const placeholder = document.getElementById("videoPlaceholder");
-        if (placeholder) placeholder.remove();
-    }
+  const data = JSON.parse(event.data);
+  if (data.type === "like_update") {
+    document.getElementById("likeCount").innerText = data.total_likes;
+    floatEmoji("❤️");
+  } else if (data.type === "gift") {
+    const p = document.createElement("p");
+    p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
+    p.style.color = "orange";
+    document.getElementById("chatArea").appendChild(p);
+    floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
+  } else if (data.type === "live_started") {
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
+  }
 };
 
 streamSocket.onopen = () => console.log("Stream socket ▸ connected");
 streamSocket.onmessage = event => {
-    const data = JSON.parse(event.data);
-    console.log("Stream socket ➜", data);
-    if (data.type === "stream_start") {
-        console.log("Live stream began");
-    } else if (data.type === "stream_data") {
-        // Place here your WebRTC or stream-handling logic
-        console.log("Stream data received", data);
-    }
+  const data = JSON.parse(event.data);
+  console.log("Stream socket ➜", data);
 };
 streamSocket.onclose = () => console.warn("Stream socket closed");
 streamSocket.onerror = e => console.error("Stream socket error", e);
 
 document.getElementById("sendBtn").onclick = () => {
-    const msg = document.getElementById("messageInput").value.trim();
-    if (msg && chatSocket.readyState === WebSocket.OPEN) {
-        chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-        document.getElementById("messageInput").value = "";
-    }
+  const msg = document.getElementById("messageInput").value.trim();
+  if (msg && chatSocket.readyState === WebSocket.OPEN) {
+    chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+    document.getElementById("messageInput").value = "";
+  }
 };
 
 document.getElementById("messageInput").addEventListener("keypress", e => {
-    if (e.key === "Enter") document.getElementById("sendBtn").click();
+  if (e.key === "Enter") document.getElementById("sendBtn").click();
 });
 
 document.getElementById("likeBtn").onclick = () => {
-    if (likeSocket.readyState === WebSocket.OPEN) {
-        likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId }));
-        liked = !liked;
-    }
+  if (likeSocket.readyState === WebSocket.OPEN) {
+    likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId }));
+    liked = !liked;
+  }
 };
 
 function approveMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
 }
 function denyMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
 }
 function revokeMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
 }
 
 document.getElementById("leaveChatBtn").onclick = () => {
-    window.location.href = "{% url 'landing' %}";
+  window.location.href = "{% url 'landing' %}";
 };
 
 const micBtn = document.getElementById("requestMicBtn");
 if (micBtn) {
-    micBtn.onclick = () => {
-        chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-        micBtn.disabled = true;
-    };
+  micBtn.onclick = () => {
+    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+    micBtn.disabled = true;
+  };
 }
 
 if (isOrganizer) {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            document.getElementById("localVideo").srcObject = stream;
-            likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-            streamSocket.send(JSON.stringify({ type: "stream_start", event_id: eventId }));
-        }).catch(() => alert("Unable to access your camera/microphone."));
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(stream => {
+      document.getElementById("localVideo").srcObject = stream;
+      likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
+      streamSocket.send(JSON.stringify({ type: "stream_start", event_id: eventId }));
+    }).catch(() => alert("Unable to access your camera/microphone."));
 }
 </script>
 
