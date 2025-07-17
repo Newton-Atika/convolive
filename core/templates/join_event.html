@@ -165,185 +165,257 @@
 {% endif %}
 
 <script>
-<!-- REPLACE this section of your template -->
-<script>
-const eventId = "{{ event.id }}";
-const user = "{{ request.user.username }}";
-const isOrganizer = {{ is_organizer|yesno:"true,false" }};
-let peerConnections = {};
-let localStream;
+const eventId = "{{ event.id|escapejs }}";
+const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
+const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+const user = "{{ request.user.username|escapejs }}";
 
-// WebSocket connections
-const chatSocket = new WebSocket(`wss://${window.location.host}/ws/live/chat/${eventId}/`);
-const likeSocket = new WebSocket(`wss://${window.location.host}/ws/live/like/${eventId}/`);
-const streamSocket = new WebSocket(`wss://${window.location.host}/ws/live/stream/${eventId}/`);
+const chatSocket = new WebSocket(${wsScheme}://${location.host}/ws/chat/${eventId}/);
+const likeSocket = new WebSocket(${wsScheme}://${location.host}/ws/event/${eventId}/);
+const streamSocket = new WebSocket(${wsScheme}://${location.host}/ws/stream/${eventId}/);
 
-chatSocket.onmessage = function(e) {
-    const data = JSON.parse(e.data);
-    const messages = document.getElementById('chat-messages');
-    messages.innerHTML += `<p><strong>${data.user}:</strong> ${data.message}</p>`;
-};
+let liked = false;
+let localMicStream = null;
+let localStream = null;
+const peerConnections = {};
 
-likeSocket.onmessage = function(e) {
-    const data = JSON.parse(e.data);
-    if (data.type === 'like') {
-        document.getElementById('like-count').innerText = data.likes;
-        const heart = document.createElement('div');
-        heart.classList.add('heart');
-        document.body.appendChild(heart);
-        setTimeout(() => heart.remove(), 1000);
-    } else if (data.type === 'gift') {
-        const float = document.createElement('div');
-        float.classList.add('gift');
-        float.innerText = `🎁 ${data.amount} KES`;
-        document.body.appendChild(float);
-        setTimeout(() => float.remove(), 2000);
-    } else if (data.type === 'viewer_count') {
-        document.getElementById('viewer-count').innerText = `Viewers: ${data.count}`;
-    }
-};
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-streamSocket.onmessage = async function(e) {
-    const data = JSON.parse(e.data);
-
-    if (data.type === 'live_started' && !isOrganizer) {
-        document.getElementById("placeholder").style.display = "none";
-        startViewerStream();
-    } else if (data.type === "offer" && isOrganizer) {
-        const viewerId = data.viewer_id;
-        const offer = data.offer;
-        handleViewerOffer(viewerId, offer);
-    } else if (data.type === "answer" && !isOrganizer) {
-        const pc = peerConnections["organizer"];
-        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-    } else if (data.type === "ice_candidate") {
-        const { target, candidate } = data;
-        const pc = peerConnections[target];
-        if (pc && candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-    }
-};
-
-function sendMessage() {
-    const input = document.getElementById("chat-message-input");
-    chatSocket.send(JSON.stringify({
-        message: input.value,
-        user: user,
-        event_id: eventId
-    }));
-    input.value = "";
+function floatEmoji(content) {
+  const el = document.createElement("div");
+  el.className = "float-emoji";
+  el.innerText = content;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
 }
 
-function sendLike() {
-    likeSocket.send(JSON.stringify({ type: "like", user: user, event_id: eventId }));
-}
-
-function sendGift() {
-    const amount = document.getElementById("gift-amount").value;
-    if (parseInt(amount) > 0) {
-        likeSocket.send(JSON.stringify({ type: "gift", user: user, amount: amount, event_id: eventId }));
-        document.getElementById("gift-amount").value = "";
-    }
-}
-
-function requestMic() {
-    streamSocket.send(JSON.stringify({ type: "mic_request", user: user, event_id: eventId }));
-}
-
-function revokeMic(username) {
-    streamSocket.send(JSON.stringify({ type: "mic_revoke", user: username, event_id: eventId }));
-}
-
-function allowMic(username) {
-    streamSocket.send(JSON.stringify({ type: "mic_allow", user: username, event_id: eventId }));
+function giftLabel(value) {
+  switch (value) {
+    case "10": return "🌹 Coin x10";
+    case "20": return "🍫 Coin x20";
+    case "50": return "⭐ Coin x50";
+    default: return 🎁 Coin x${value};
+  }
 }
 
 async function startOrganizerStream() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById("localVideo").srcObject = localStream;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.getElementById("localVideo").srcObject = localStream;
 
-        // Announce stream started to viewers
-        likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-        streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-    } catch (err) {
-        console.error("Failed to start organizer stream:", err);
-    }
+    likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
+    streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
+  } catch (err) {
+    console.error("Failed to start stream:", err);
+    alert("Could not access your camera and microphone.");
+  }
 }
 
 async function handleViewerOffer(viewerId, offer) {
-    if (!localStream) {
-        console.warn("Organizer's localStream not ready");
-        return;
-    }
+  const pc = new RTCPeerConnection(iceServers);
+  peerConnections[viewerId] = pc;
 
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    peerConnections[viewerId] = pc;
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-    pc.onicecandidate = event => {
-        if (event.candidate) {
-            streamSocket.send(JSON.stringify({
-                type: "ice_candidate",
-                target: viewerId,
-                candidate: event.candidate,
-                event_id: eventId
-            }));
-        }
-    };
-
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    streamSocket.send(JSON.stringify({
-        type: "answer",
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      streamSocket.send(JSON.stringify({
+        type: "organizer_ice",
         target: viewerId,
-        answer: pc.localDescription,
-        event_id: eventId
-    }));
+        candidate: e.candidate
+      }));
+    }
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  streamSocket.send(JSON.stringify({
+    type: "organizer_answer",
+    target: viewerId,
+    answer: pc.localDescription
+  }));
+}
+
+function handleViewerIce(viewerId, candidate) {
+  const pc = peerConnections[viewerId];
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  }
 }
 
 async function startViewerStream() {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    peerConnections["organizer"] = pc;
+  const pc = new RTCPeerConnection(iceServers);
+  peerConnections["organizer"] = pc;
 
-    pc.ontrack = event => {
-        document.getElementById("viewerStream").srcObject = event.streams[0];
-        document.getElementById("viewerStream").style.display = "block";
-    };
-
-    pc.onicecandidate = event => {
-        if (event.candidate) {
-            streamSocket.send(JSON.stringify({
-                type: "ice_candidate",
-                target: "organizer",
-                candidate: event.candidate,
-                event_id: eventId
-            }));
-        }
-    };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    streamSocket.send(JSON.stringify({
-        type: "offer",
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      streamSocket.send(JSON.stringify({
+        type: "viewer_ice",
         viewer_id: user,
-        offer: pc.localDescription,
-        event_id: eventId
-    }));
+        candidate: e.candidate
+      }));
+    }
+  };
+
+  pc.ontrack = event => {
+    const vid = document.getElementById("viewerStream");
+    if (vid && !vid.srcObject) {
+      vid.srcObject = event.streams[0];
+      vid.style.display = "block";
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  streamSocket.send(JSON.stringify({
+    type: "viewer_offer",
+    viewer_id: user,
+    offer: pc.localDescription
+  }));
 }
 
-// Start stream if organizer
-if (isOrganizer) {
-    startOrganizerStream();
+async function handleOrganizerAnswer(answer) {
+  const pc = peerConnections["organizer"];
+  if (!pc) return console.warn("No PC for organizer");
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
 }
 
-// Optional: clean up on leave
-window.addEventListener("beforeunload", () => {
-    Object.values(peerConnections).forEach(pc => pc.close());
-});
+function handleOrganizerIce(candidate) {
+  const pc = peerConnections["organizer"];
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  }
+}
+
+streamSocket.onopen = () => {
+  console.log("✅ Stream socket opened");
+  if (isOrganizer) startOrganizerStream();
+};
+
+streamSocket.onmessage = async e => {
+  const data = JSON.parse(e.data);
+  console.log("📡 Stream message:", data);
+
+  if (data.type === "viewer_offer" && isOrganizer) {
+    await handleViewerOffer(data.viewer_id, data.offer);
+  } else if (data.type === "organizer_answer" && !isOrganizer) {
+    await handleOrganizerAnswer(data.answer);
+  } else if (data.type === "viewer_ice" && isOrganizer) {
+    handleViewerIce(data.viewer_id, data.candidate);
+  } else if (data.type === "organizer_ice" && !isOrganizer) {
+    handleOrganizerIce(data.candidate);
+  } else if (data.type === "live_started" && !isOrganizer) {
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
+    startViewerStream();
+  }
+};
 </script>
+
+chatSocket.onmessage = event => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === "chat") {
+    const p = document.createElement("p");
+    p.innerHTML = <strong>${data.username}:</strong> ${data.message};
+    const chatArea = document.getElementById("chatArea");
+    chatArea.appendChild(p);
+    chatArea.scrollTop = chatArea.scrollHeight;
+  } else if (data.type === "mic_request" && isOrganizer) {
+    const li = document.createElement("li");
+    li.id = mic-${data.username};
+    li.innerHTML = ${data.username} wants to speak
+      <button onclick="approveMic('${data.username}')">✅ Approve</button>
+      <button onclick="denyMic('${data.username}')">❌ Deny</button>;
+    document.getElementById("requestList").appendChild(li);
+  } else if (data.type === "mic_approved") {
+    if (!isOrganizer && data.username === user) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        localMicStream = stream;
+        const video = document.getElementById("viewerStream");
+        video.srcObject = stream;
+        video.style.display = "block";
+        floatEmoji("🎤 You are live!");
+      }).catch(() => alert("Could not access microphone."));
+    } else {
+      const el = document.getElementById(mic-${data.username});
+      if (el) el.remove();
+    }
+  } else if (data.type === "mic_denied") {
+    if (data.username === user) alert("❌ Your mic request was denied.");
+    else {
+      const el = document.getElementById(mic-${data.username});
+      if (el) el.remove();
+    }
+  } else if (data.type === "mic_revoked" && data.username === user) {
+    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+    document.getElementById("viewerStream").style.display = "none";
+    alert("🔇 Your mic access was revoked.");
+  }
+};
+
+likeSocket.onmessage = event => {
+  const data = JSON.parse(event.data);
+  if (data.type === "like_update") {
+    document.getElementById("likeCount").innerText = data.total_likes;
+    floatEmoji("❤️");
+  } else if (data.type === "gift") {
+    const p = document.createElement("p");
+    p.textContent = 🎁 ${data.user} sent ${giftLabel(data.gift)};
+    p.style.color = "orange";
+    document.getElementById("chatArea").appendChild(p);
+    floatEmoji(🎁 ${data.user} sent ${giftLabel(data.gift)});
+  } else if (data.type === "live_started") {
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
+  }
+};
+
+document.getElementById("sendBtn").onclick = () => {
+  const msg = document.getElementById("messageInput").value.trim();
+  if (msg && chatSocket.readyState === WebSocket.OPEN) {
+    chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+    document.getElementById("messageInput").value = "";
+  }
+};
+
+document.getElementById("messageInput").addEventListener("keypress", e => {
+  if (e.key === "Enter") document.getElementById("sendBtn").click();
+});
+
+document.getElementById("likeBtn").onclick = () => {
+  if (likeSocket.readyState === WebSocket.OPEN) {
+    likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId }));
+    liked = !liked;
+  }
+};
+
+function approveMic(username) {
+  chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+}
+function denyMic(username) {
+  chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+}
+function revokeMic(username) {
+  chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+}
+
+document.getElementById("leaveChatBtn").onclick = () => {
+  window.location.href = "{% url 'landing' %}";
+};
+
+const micBtn = document.getElementById("requestMicBtn");
+if (micBtn) {
+  micBtn.onclick = () => {
+    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+    micBtn.disabled = true;
+  };
+}
+</script>
+
+
+</body>
+</html>
