@@ -213,6 +213,8 @@
 </div>
 {% endif %}
 
+<!-- ... [head and styles remain unchanged] -->
+
 <script>
     const eventId = "{{ event.id|escapejs }}";
     const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
@@ -229,7 +231,7 @@
         el.className = "float-emoji";
         el.innerText = content;
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 4000);  // Stay for 4 seconds
+        setTimeout(() => el.remove(), 4000);
     }
 
     function giftLabel(value) {
@@ -294,6 +296,8 @@
 
     likeSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log("✅ likeSocket received:", data); // ✅ Log incoming like messages
+
         if (data.type === "like_update") {
             document.getElementById("likeCount").innerText = data.total_likes;
             floatEmoji("❤️");
@@ -325,11 +329,15 @@
 
     document.getElementById("likeBtn").onclick = () => {
         if (likeSocket.readyState === WebSocket.OPEN) {
-            likeSocket.send(JSON.stringify({ event_id: eventId, action: liked ? "unlike" : "like" }));
+            const action = liked ? "unlike" : "like";
+            console.log("✅ Sending likeSocket action:", action); // ✅ Log outgoing action
+            likeSocket.send(JSON.stringify({ event_id: eventId, action }));
             liked = !liked;
             document.getElementById("likeBtn").innerHTML = liked
                 ? `💔 Unlike (<span id="likeCount">${document.getElementById("likeCount").innerText}</span>)`
                 : `❤️ Like (<span id="likeCount">${document.getElementById("likeCount").innerText}</span>)`;
+        } else {
+            console.warn("⚠️ likeSocket not open.");
         }
     };
 
@@ -338,6 +346,10 @@
             document.getElementById("localVideo").srcObject = stream;
             if (likeSocket.readyState === WebSocket.OPEN) {
                 likeSocket.send(JSON.stringify({ 'live_started': true }));
+            } else {
+                likeSocket.onopen = () => {
+                    likeSocket.send(JSON.stringify({ 'live_started': true }));
+                };
             }
         }).catch(error => alert("Could not access camera"));
     }
@@ -370,5 +382,6 @@
         console.log("Leave Chat button clicked (not implemented)");
     };
 </script>
+
 </body>
 </html>
