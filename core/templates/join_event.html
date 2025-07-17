@@ -308,7 +308,6 @@ streamSocket.onopen = () => {
 
 streamSocket.onmessage = async e => {
   const data = JSON.parse(e.data);
-  console.log("Stream message:", data);
 
   if (data.type === "viewer_offer" && isOrganizer) {
     await handleViewerOffer(data.viewer_id, data.offer);
@@ -319,14 +318,17 @@ streamSocket.onmessage = async e => {
   } else if (data.type === "organizer_ice" && !isOrganizer) {
     handleOrganizerIce(data.candidate);
   } else if (data.type === "live_started" && !isOrganizer) {
-    document.getElementById("videoPlaceholder")?.remove();
-    startViewerStream();
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
+    startViewerStream();  // 👈 This works for "live_started"
   } else if (data.type === "stream_active" && !isOrganizer) {
-    // Organizer is already streaming
-    document.getElementById("videoPlaceholder")?.remove();
+    // 👇 ADD THIS BLOCK
+    const placeholder = document.getElementById("videoPlaceholder");
+    if (placeholder) placeholder.remove();
     startViewerStream();
   }
 };
+
 
 chatSocket.onmessage = event => {
   const data = JSON.parse(event.data);
