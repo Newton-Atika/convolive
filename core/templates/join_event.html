@@ -219,7 +219,6 @@ async function startOrganizerStream() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     document.getElementById("localVideo").srcObject = localStream;
-
     likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
     streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
   } catch (err) {
@@ -231,9 +230,7 @@ async function startOrganizerStream() {
 async function handleViewerOffer(viewerId, offer) {
   const pc = new RTCPeerConnection(iceServers);
   peerConnections[viewerId] = pc;
-
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
   pc.onicecandidate = e => {
     if (e.candidate) {
       streamSocket.send(JSON.stringify({
@@ -243,11 +240,9 @@ async function handleViewerOffer(viewerId, offer) {
       }));
     }
   };
-
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-
   streamSocket.send(JSON.stringify({
     type: "organizer_answer",
     target: viewerId,
@@ -257,15 +252,12 @@ async function handleViewerOffer(viewerId, offer) {
 
 function handleViewerIce(viewerId, candidate) {
   const pc = peerConnections[viewerId];
-  if (pc && candidate) {
-    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
-  }
+  if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
 }
 
 async function startViewerStream() {
   const pc = new RTCPeerConnection(iceServers);
   peerConnections["organizer"] = pc;
-
   pc.onicecandidate = e => {
     if (e.candidate) {
       streamSocket.send(JSON.stringify({
@@ -275,19 +267,18 @@ async function startViewerStream() {
       }));
     }
   };
-
   pc.ontrack = event => {
     const vid = document.getElementById("viewerStream");
-    if (vid && !vid.srcObject) {
-      vid.srcObject = event.streams[0];
+    const [stream] = event.streams;
+    if (vid) {
+      vid.srcObject = stream;
       vid.style.display = "block";
       vid.muted = false;
+      console.log("🎥 Viewer received stream");
     }
   };
-
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-
   streamSocket.send(JSON.stringify({
     type: "viewer_offer",
     viewer_id: user,
@@ -303,17 +294,21 @@ async function handleOrganizerAnswer(answer) {
 
 function handleOrganizerIce(candidate) {
   const pc = peerConnections["organizer"];
-  if (pc && candidate) {
-    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
-  }
+  if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
 }
 
 streamSocket.onopen = () => {
-  if (isOrganizer) startOrganizerStream();
+  if (isOrganizer) {
+    startOrganizerStream();
+  } else {
+    // Ask organizer if stream is already active
+    streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user }));
+  }
 };
 
 streamSocket.onmessage = async e => {
   const data = JSON.parse(e.data);
+  console.log("Stream message:", data);
 
   if (data.type === "viewer_offer" && isOrganizer) {
     await handleViewerOffer(data.viewer_id, data.offer);
@@ -324,8 +319,11 @@ streamSocket.onmessage = async e => {
   } else if (data.type === "organizer_ice" && !isOrganizer) {
     handleOrganizerIce(data.candidate);
   } else if (data.type === "live_started" && !isOrganizer) {
-    const placeholder = document.getElementById("videoPlaceholder");
-    if (placeholder) placeholder.remove();
+    document.getElementById("videoPlaceholder")?.remove();
+    startViewerStream();
+  } else if (data.type === "stream_active" && !isOrganizer) {
+    // Organizer is already streaming
+    document.getElementById("videoPlaceholder")?.remove();
     startViewerStream();
   }
 };
@@ -342,34 +340,28 @@ chatSocket.onmessage = event => {
   } else if (data.type === "mic_request" && isOrganizer) {
     const li = document.createElement("li");
     li.id = `mic-${data.username}`;
-    li.innerHTML = `${data.username} wants to speak 
-      <button onclick="approveMic('${data.username}')">✅ Approve</button>
-      <button onclick="denyMic('${data.username}')">❌ Deny</button>`;
+    li.innerHTML = `${data.username} requests mic 
+      <button onclick="approveMic('${data.username}')">✅</button>
+      <button onclick="denyMic('${data.username}')">❌</button>`;
     document.getElementById("requestList").appendChild(li);
   } else if (data.type === "mic_approved") {
     if (!isOrganizer && data.username === user) {
-      navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
-        localMicStream = stream;
-        const video = document.getElementById("viewerStream");
-        video.srcObject = stream;
-        video.style.display = "block";
-        floatEmoji("🎤🎥 You are live!");
-      }).catch(() => alert("Could not access camera/microphone."));
-    } else {
-      const el = document.getElementById(`mic-${data.username}`);
-      if (el) el.remove();
-    }
+      navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        .then(stream => {
+          localMicStream = stream;
+          const video = document.getElementById("viewerStream");
+          video.srcObject = stream;
+          video.style.display = "block";
+          floatEmoji("🎤🎥 You are live!");
+        })
+        .catch(() => alert("Could not access camera/microphone."));
+    } else document.getElementById(`mic-${data.username}`)?.remove();
   } else if (data.type === "mic_denied") {
     if (data.username === user) alert("❌ Your mic request was denied.");
-    else {
-      const el = document.getElementById(`mic-${data.username}`);
-      if (el) el.remove();
-    }
+    else document.getElementById(`mic-${data.username}`)?.remove();
   } else if (data.type === "mic_revoked" && data.username === user) {
-    if (localMicStream) {
-      localMicStream.getTracks().forEach(t => t.stop());
-      localMicStream = null;
-    }
+    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+    localMicStream = null;
     const video = document.getElementById("viewerStream");
     video.srcObject = null;
     video.style.display = "none";
@@ -389,8 +381,7 @@ likeSocket.onmessage = event => {
     document.getElementById("chatArea").appendChild(p);
     floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
   } else if (data.type === "live_started") {
-    const placeholder = document.getElementById("videoPlaceholder");
-    if (placeholder) placeholder.remove();
+    document.getElementById("videoPlaceholder")?.remove();
   }
 };
 
@@ -436,6 +427,7 @@ if (micBtn) {
   };
 }
 </script>
+
 
 </body>
 </html>
