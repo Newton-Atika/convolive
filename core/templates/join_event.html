@@ -208,7 +208,7 @@ async function startOrganizerStream() {
 
     // Notify backend/viewers live started
     likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-    streamSocket.send(JSON.stringify({ type: "stream_start", event_id: eventId }));
+    streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
   } catch {
     alert("Unable to access your camera/microphone.");
   }
