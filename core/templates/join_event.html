@@ -198,6 +198,9 @@ let localStream = null;
 const peerConnections = {};
 const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
+let streamReady = false;  // NEW: flag to indicate organizer stream is ready
+const pendingOffers = {}; // NEW: buffer for viewer offers until stream is ready
+
 function floatEmoji(content) {
   const el = document.createElement("div");
   el.className = "float-emoji";
@@ -220,7 +223,15 @@ async function startOrganizerStream() {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     document.getElementById("localVideo").srcObject = localStream;
 
-    // Notify both sockets
+    streamReady = true;  // Set stream ready flag
+
+    // Process any buffered viewer offers now that stream is ready
+    for (const viewerId in pendingOffers) {
+      await handleViewerOffer(viewerId, pendingOffers[viewerId]);
+      delete pendingOffers[viewerId];
+    }
+
+    // Notify viewers that live stream has started
     likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
     streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
   } catch (err) {
@@ -315,6 +326,7 @@ streamSocket.onopen = () => {
   if (isOrganizer) {
     startOrganizerStream();
   } else {
+    // Viewer asks if stream is live
     streamSocket.send(JSON.stringify({
       type: "check_stream",
       viewer_id: user
@@ -326,14 +338,24 @@ streamSocket.onmessage = async e => {
   const data = JSON.parse(e.data);
 
   if (data.type === "viewer_offer" && isOrganizer) {
+    if (!streamReady) {
+      // Buffer viewer offer until stream is ready
+      pendingOffers[data.viewer_id] = data.offer;
+      return;
+    }
     await handleViewerOffer(data.viewer_id, data.offer);
+
   } else if (data.type === "organizer_answer" && !isOrganizer) {
     await handleOrganizerAnswer(data.answer);
+
   } else if (data.type === "viewer_ice" && isOrganizer) {
     handleViewerIce(data.viewer_id, data.candidate);
+
   } else if (data.type === "organizer_ice" && !isOrganizer) {
     handleOrganizerIce(data.candidate);
+
   } else if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
+    // Organizer stream is live, viewer can start
     const placeholder = document.getElementById("videoPlaceholder");
     if (placeholder) placeholder.remove();
     startViewerStream();
@@ -421,35 +443,34 @@ document.getElementById("messageInput").addEventListener("keypress", e => {
 document.getElementById("likeBtn").onclick = () => {
   if (likeSocket.readyState === WebSocket.OPEN) {
     likeSocket.send(JSON.stringify({
-      action: liked ?
-"unlike" : "like",
-event_id: eventId
-}));
-liked = !liked;
-document.getElementById("likeBtn").classList.toggle("liked", liked);
-}
+      action: liked ? "unlike" : "like",
+      event_id: eventId
+    }));
+    liked = !liked;
+    document.getElementById("likeBtn").classList.toggle("liked", liked);
+  }
 };
 
 function approveMic(username) {
-chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
 }
 function denyMic(username) {
-chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
 }
 function revokeMic(username) {
-chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+  chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
 }
 
 document.getElementById("leaveChatBtn").onclick = () => {
-window.location.href = "{% url 'landing' %}";
+  window.location.href = "{% url 'landing' %}";
 };
 
 const micBtn = document.getElementById("requestMicBtn");
 if (micBtn) {
-micBtn.onclick = () => {
-chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-micBtn.disabled = true;
-};
+  micBtn.onclick = () => {
+    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+    micBtn.disabled = true;
+  };
 }
 </script>
 
