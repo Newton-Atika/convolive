@@ -171,135 +171,121 @@ class ChatConsumer(AsyncWebsocketConsumer):
         ChatMessage.objects.create(event=event, username=username, message=message)
 
 
+import json
+from channels.generic.websocket import AsyncWebsocketConsumer
+
 class StreamConsumer(AsyncWebsocketConsumer):
     organizers = {}
 
     async def connect(self):
-        self.event_id = self.scope["url_route"]["kwargs"]["event_id"]
+        self.event_id = self.scope['url_route']['kwargs']['event_id']
         self.group_name = f"stream_{self.event_id}"
-        user = self.scope["user"]
 
+        user = self.scope['user']
+        self.is_organizer = str(user.pk) == self.event_id  # You can adjust this logic
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()
 
-        if await self.is_organizer(user, self.event_id):
+        if self.is_organizer:
             StreamConsumer.organizers[self.event_id] = self.channel_name
-            self.is_organizer = True
+            print(f"[ORGANIZER CONNECTED] {user} -> {self.channel_name}")
         else:
-            self.is_organizer = False
+            print(f"[VIEWER CONNECTED] {user} -> {self.channel_name}")
+
+        await self.accept()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
         if self.is_organizer:
             StreamConsumer.organizers.pop(self.event_id, None)
-            await self.channel_layer.group_send(
-                self.group_name,
-                {"type": "organizer_left"}
-            )
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         msg_type = data.get("type")
-        user = self.scope["user"]
+        target = data.get("target")
 
-        if self.is_organizer:
-            if msg_type == "organizer_answer":
-                target_channel = data["target"]
+        # Organizer says stream is live
+        if msg_type == "live_started":
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "broadcast_live_started",
+                }
+            )
+
+        # Viewer sends offer
+        elif msg_type == "viewer_offer":
+            target_organizer = StreamConsumer.organizers.get(self.event_id)
+            if target_organizer:
                 await self.channel_layer.send(
-                    target_channel,
+                    target_organizer,
                     {
-                        "type": "send_answer_to_viewer",
+                        "type": "viewer_offer",
+                        "viewer_id": data["viewer_id"],
+                        "offer": data["offer"],
+                    }
+                )
+
+        # Organizer sends answer
+        elif msg_type == "organizer_answer":
+            if target:
+                await self.channel_layer.send(
+                    target,
+                    {
+                        "type": "organizer_answer",
                         "answer": data["answer"]
                     }
                 )
-            elif msg_type == "organizer_ice":
-                target_channel = data["target"]
+
+        # ICE Candidates
+        elif msg_type == "viewer_ice":
+            target_organizer = StreamConsumer.organizers.get(self.event_id)
+            if target_organizer:
                 await self.channel_layer.send(
-                    target_channel,
+                    target_organizer,
                     {
-                        "type": "send_ice_to_viewer",
+                        "type": "viewer_ice",
+                        "viewer_id": data["viewer_id"],
+                        "candidate": data["candidate"],
+                    }
+                )
+
+        elif msg_type == "organizer_ice":
+            if target:
+                await self.channel_layer.send(
+                    target,
+                    {
+                        "type": "organizer_ice",
                         "candidate": data["candidate"]
                     }
                 )
-            elif msg_type == "live_started":
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {"type": "live_started"}
-                )
-        else:
-            organizer_channel = StreamConsumer.organizers.get(self.event_id)
-            if not organizer_channel:
-                await self.send(text_data=json.dumps({
-                    "type": "error",
-                    "message": "Organizer not connected"
-                }))
-                return
 
-            if msg_type == "viewer_offer":
-                await self.channel_layer.send(
-                    organizer_channel,
-                    {
-                        "type": "send_offer_to_organizer",
-                        "viewer_id": self.channel_name,
-                        "offer": data["offer"]
-                    }
-                )
-            elif msg_type == "viewer_ice":
-                await self.channel_layer.send(
-                    organizer_channel,
-                    {
-                        "type": "send_ice_to_organizer",
-                        "candidate": data["candidate"],
-                        "viewer_id": self.channel_name
-                    }
-                )
-
-    async def send_offer_to_organizer(self, event):
-        if self.is_organizer:
-            await self.send(text_data=json.dumps({
-                "type": "viewer_offer",
-                "viewer_id": event["viewer_id"],
-                "offer": event["offer"]
-            }))
-
-    async def send_answer_to_viewer(self, event):
-        if not self.is_organizer:
-            await self.send(text_data=json.dumps({
-                "type": "organizer_answer",
-                "answer": event["answer"]
-            }))
-
-    async def send_ice_to_organizer(self, event):
-        if self.is_organizer:
-            await self.send(text_data=json.dumps({
-                "type": "viewer_ice",
-                "candidate": event["candidate"],
-                "viewer_id": event["viewer_id"]
-            }))
-
-    async def send_ice_to_viewer(self, event):
-        if not self.is_organizer:
-            await self.send(text_data=json.dumps({
-                "type": "organizer_ice",
-                "candidate": event["candidate"]
-            }))
-
-    async def live_started(self, event):
-        await self.send(text_data=json.dumps({
+    async def broadcast_live_started(self, event):
+        await self.send(json.dumps({
             "type": "live_started"
         }))
 
-    async def organizer_left(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "organizer_left",
-            "message": "Organizer has disconnected."
+    async def viewer_offer(self, event):
+        await self.send(json.dumps({
+            "type": "viewer_offer",
+            "viewer_id": event["viewer_id"],
+            "offer": event["offer"],
         }))
 
-    @sync_to_async
-    def is_organizer(self, user, event_id):
-        Event = apps.get_model('core', 'Event')
-        try:
-            event = Event.objects.get(id=event_id)
-            return user.is_authenticated and user.id == event.organizer_id
-        except Event.DoesNotExist:
-            return False
+    async def organizer_answer(self, event):
+        await self.send(json.dumps({
+            "type": "organizer_answer",
+            "answer": event["answer"]
+        }))
+
+    async def viewer_ice(self, event):
+        await self.send(json.dumps({
+            "type": "viewer_ice",
+            "viewer_id": event["viewer_id"],
+            "candidate": event["candidate"]
+        }))
+
+    async def organizer_ice(self, event):
+        await self.send(json.dumps({
+            "type": "organizer_ice",
+            "candidate": event["candidate"]
+        }))
