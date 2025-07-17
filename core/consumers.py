@@ -169,8 +169,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         ChatMessage = apps.get_model('core', 'ChatMessage')
         event = Event.objects.get(id=self.event_id)
         ChatMessage.objects.create(event=event, username=username, message=message)
-
-
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 
@@ -182,7 +180,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.group_name = f"stream_{self.event_id}"
 
         user = self.scope['user']
-        self.is_organizer = str(user.pk) == self.event_id  # You can adjust this logic
+        self.is_organizer = str(user.pk) == self.event_id  # Adjust logic if needed
+
         await self.channel_layer.group_add(self.group_name, self.channel_name)
 
         if self.is_organizer:
@@ -197,13 +196,14 @@ class StreamConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
         if self.is_organizer:
             StreamConsumer.organizers.pop(self.event_id, None)
+            print(f"[ORGANIZER DISCONNECTED] {self.scope['user']}")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         msg_type = data.get("type")
         target = data.get("target")
 
-        # Organizer says stream is live
+        # Organizer starts live stream
         if msg_type == "live_started":
             await self.channel_layer.group_send(
                 self.group_name,
@@ -212,7 +212,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-        # Viewer sends offer
+        # Viewer sends WebRTC offer
         elif msg_type == "viewer_offer":
             target_organizer = StreamConsumer.organizers.get(self.event_id)
             if target_organizer:
@@ -225,7 +225,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-        # Organizer sends answer
+        # Organizer sends WebRTC answer
         elif msg_type == "organizer_answer":
             if target:
                 await self.channel_layer.send(
@@ -236,7 +236,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-        # ICE Candidates
+        # Viewer sends ICE candidate
         elif msg_type == "viewer_ice":
             target_organizer = StreamConsumer.organizers.get(self.event_id)
             if target_organizer:
@@ -249,6 +249,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
+        # Organizer sends ICE candidate
         elif msg_type == "organizer_ice":
             if target:
                 await self.channel_layer.send(
@@ -259,6 +260,17 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
+        # Viewer checks if stream is already active
+        elif msg_type == "check_stream":
+            if self.event_id in StreamConsumer.organizers:
+                await self.send(json.dumps({
+                    "type": "stream_active"
+                }))
+                print(f"[CHECK_STREAM] Organizer live for event {self.event_id}")
+            else:
+                print(f"[CHECK_STREAM] Organizer not live for event {self.event_id}")
+
+    # Handlers for group messages
     async def broadcast_live_started(self, event):
         await self.send(json.dumps({
             "type": "live_started"
