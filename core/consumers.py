@@ -18,11 +18,12 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         event_id = data.get("event_id")
         action = data.get("action")
+        user = self.scope["user"]
 
+        # Handle like/unlike
         if event_id and action in ["like", "unlike"]:
             Event = apps.get_model('core', 'Event')
             event = await sync_to_async(Event.objects.get)(id=event_id)
-            user = self.scope["user"]
 
             if user.is_authenticated:
                 if action == "like":
@@ -40,16 +41,19 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-        elif "gift" in data:
+        # Handle gift
+        elif "gift" in data and user.is_authenticated:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     "type": "gift",
-                    "user": self.scope["user"].username,
+                    "user": user.username,
                     "gift": data["gift"]
                 }
             )
-        elif "live_started" in data:
+
+        # Handle live_started
+        elif data.get("live_started") is True:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -74,7 +78,6 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "live_started"
         }))
-
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
