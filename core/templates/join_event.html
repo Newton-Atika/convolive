@@ -219,6 +219,8 @@ async function startOrganizerStream() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     document.getElementById("localVideo").srcObject = localStream;
+
+    // Notify both sockets
     likeSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
     streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
   } catch (err) {
@@ -230,7 +232,9 @@ async function startOrganizerStream() {
 async function handleViewerOffer(viewerId, offer) {
   const pc = new RTCPeerConnection(iceServers);
   peerConnections[viewerId] = pc;
+
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
   pc.onicecandidate = e => {
     if (e.candidate) {
       streamSocket.send(JSON.stringify({
@@ -240,9 +244,11 @@ async function handleViewerOffer(viewerId, offer) {
       }));
     }
   };
+
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
+
   streamSocket.send(JSON.stringify({
     type: "organizer_answer",
     target: viewerId,
@@ -252,12 +258,15 @@ async function handleViewerOffer(viewerId, offer) {
 
 function handleViewerIce(viewerId, candidate) {
   const pc = peerConnections[viewerId];
-  if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  }
 }
 
 async function startViewerStream() {
   const pc = new RTCPeerConnection(iceServers);
   peerConnections["organizer"] = pc;
+
   pc.onicecandidate = e => {
     if (e.candidate) {
       streamSocket.send(JSON.stringify({
@@ -267,6 +276,7 @@ async function startViewerStream() {
       }));
     }
   };
+
   pc.ontrack = event => {
     const vid = document.getElementById("viewerStream");
     const [stream] = event.streams;
@@ -277,8 +287,10 @@ async function startViewerStream() {
       console.log("🎥 Viewer received stream");
     }
   };
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+
   streamSocket.send(JSON.stringify({
     type: "viewer_offer",
     viewer_id: user,
@@ -294,15 +306,19 @@ async function handleOrganizerAnswer(answer) {
 
 function handleOrganizerIce(candidate) {
   const pc = peerConnections["organizer"];
-  if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+  }
 }
 
 streamSocket.onopen = () => {
   if (isOrganizer) {
     startOrganizerStream();
   } else {
-    // Ask organizer if stream is already active
-    streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user }));
+    streamSocket.send(JSON.stringify({
+      type: "check_stream",
+      viewer_id: user
+    }));
   }
 };
 
@@ -317,19 +333,14 @@ streamSocket.onmessage = async e => {
     handleViewerIce(data.viewer_id, data.candidate);
   } else if (data.type === "organizer_ice" && !isOrganizer) {
     handleOrganizerIce(data.candidate);
-  } else if (data.type === "live_started" && !isOrganizer) {
-    const placeholder = document.getElementById("videoPlaceholder");
-    if (placeholder) placeholder.remove();
-    startViewerStream();  // 👈 This works for "live_started"
-  } else if (data.type === "stream_active" && !isOrganizer) {
-    // 👇 ADD THIS BLOCK
+  } else if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
     const placeholder = document.getElementById("videoPlaceholder");
     if (placeholder) placeholder.remove();
     startViewerStream();
   }
 };
 
-
+// CHAT SOCKET
 chatSocket.onmessage = event => {
   const data = JSON.parse(event.data);
 
@@ -357,12 +368,19 @@ chatSocket.onmessage = event => {
           floatEmoji("🎤🎥 You are live!");
         })
         .catch(() => alert("Could not access camera/microphone."));
-    } else document.getElementById(`mic-${data.username}`)?.remove();
+    } else {
+      document.getElementById(`mic-${data.username}`)?.remove();
+    }
   } else if (data.type === "mic_denied") {
-    if (data.username === user) alert("❌ Your mic request was denied.");
-    else document.getElementById(`mic-${data.username}`)?.remove();
+    if (data.username === user) {
+      alert("❌ Your mic request was denied.");
+    } else {
+      document.getElementById(`mic-${data.username}`)?.remove();
+    }
   } else if (data.type === "mic_revoked" && data.username === user) {
-    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+    if (localMicStream) {
+      localMicStream.getTracks().forEach(t => t.stop());
+    }
     localMicStream = null;
     const video = document.getElementById("viewerStream");
     video.srcObject = null;
@@ -371,6 +389,7 @@ chatSocket.onmessage = event => {
   }
 };
 
+// LIKE SOCKET
 likeSocket.onmessage = event => {
   const data = JSON.parse(event.data);
   if (data.type === "like_update") {
@@ -401,32 +420,36 @@ document.getElementById("messageInput").addEventListener("keypress", e => {
 
 document.getElementById("likeBtn").onclick = () => {
   if (likeSocket.readyState === WebSocket.OPEN) {
-    likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId }));
-    liked = !liked;
-    document.getElementById("likeBtn").classList.toggle("liked", liked);
-  }
+    likeSocket.send(JSON.stringify({
+      action: liked ?
+"unlike" : "like",
+event_id: eventId
+}));
+liked = !liked;
+document.getElementById("likeBtn").classList.toggle("liked", liked);
+}
 };
 
 function approveMic(username) {
-  chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
 }
 function denyMic(username) {
-  chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
 }
 function revokeMic(username) {
-  chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
 }
 
 document.getElementById("leaveChatBtn").onclick = () => {
-  window.location.href = "{% url 'landing' %}";
+window.location.href = "{% url 'landing' %}";
 };
 
 const micBtn = document.getElementById("requestMicBtn");
 if (micBtn) {
-  micBtn.onclick = () => {
-    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-    micBtn.disabled = true;
-  };
+micBtn.onclick = () => {
+chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+micBtn.disabled = true;
+};
 }
 </script>
 
