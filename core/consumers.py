@@ -179,70 +179,64 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class StreamConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # Extract event ID from the URL and set up a group for this event
         self.event_id = self.scope["url_route"]["kwargs"]["event_id"]
         self.group_name = f"stream_{self.event_id}"
-
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Cleanly remove the connection from the event-specific group
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-
         msg_type = data.get("type")
-        # Viewer sends SDP offer
+
         if msg_type == "viewer_offer":
-            offer = data["offer"]
             await self.channel_layer.group_send(
                 self.group_name,
                 {
                     "type": "send_offer_to_organizer",
                     "viewer_id": self.channel_name,
-                    "offer": offer
+                    "offer": data["offer"]
                 }
             )
 
-        # Organizer sends SDP answer targeted to a specific viewer
         elif msg_type == "organizer_answer":
-            target = data["target"]
-            answer = data["answer"]
             await self.channel_layer.send(
-                target,
+                data["target"],
                 {
                     "type": "send_answer_to_viewer",
-                    "answer": answer
+                    "answer": data["answer"]
                 }
             )
 
-        # Viewer sends ICE candidates to organizer
         elif msg_type == "viewer_ice":
-            candidate = data["candidate"]
             await self.channel_layer.group_send(
                 self.group_name,
                 {
                     "type": "send_ice_to_organizer",
-                    "candidate": candidate,
+                    "candidate": data["candidate"],
                     "viewer_id": self.channel_name
                 }
             )
 
-        # Organizer sends ICE candidates to a specific viewer
         elif msg_type == "organizer_ice":
-            target = data["target"]
-            candidate = data["candidate"]
             await self.channel_layer.send(
-                target,
+                data["target"],
                 {
                     "type": "send_ice_to_viewer",
-                    "candidate": candidate
+                    "candidate": data["candidate"]
                 }
             )
 
-    # Group handler: forwards viewer's offer to organizer(s)
+        elif data.get("live_started") is True:
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "live_started"
+                }
+            )
+
     async def send_offer_to_organizer(self, event):
         await self.send(text_data=json.dumps({
             "type": "viewer_offer",
@@ -250,14 +244,12 @@ class StreamConsumer(AsyncWebsocketConsumer):
             "offer": event["offer"]
         }))
 
-    # Individual handler: organizer → viewer answer
     async def send_answer_to_viewer(self, event):
         await self.send(text_data=json.dumps({
             "type": "organizer_answer",
             "answer": event["answer"]
         }))
 
-    # Group handler: viewer ICE → organizer
     async def send_ice_to_organizer(self, event):
         await self.send(text_data=json.dumps({
             "type": "viewer_ice",
@@ -265,9 +257,14 @@ class StreamConsumer(AsyncWebsocketConsumer):
             "viewer_id": event["viewer_id"]
         }))
 
-    # Individual handler: organizer ICE → viewer
     async def send_ice_to_viewer(self, event):
         await self.send(text_data=json.dumps({
             "type": "organizer_ice",
             "candidate": event["candidate"]
         }))
+
+    async def live_started(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "live_started"
+        }))
+
