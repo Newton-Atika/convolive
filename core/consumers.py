@@ -3,7 +3,6 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from django.apps import apps
 
-
 class EventLikeConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.event_id = self.scope["url_route"]["kwargs"]["event_id"]
@@ -20,19 +19,15 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
         action = data.get("action")
         user = self.scope["user"]
 
-        # Handle like/unlike
         if event_id and action in ["like", "unlike"]:
             Event = apps.get_model('core', 'Event')
             event = await sync_to_async(Event.objects.get)(id=event_id)
-
             if user.is_authenticated:
                 if action == "like":
                     await sync_to_async(event.likes.add)(user)
                 elif action == "unlike":
                     await sync_to_async(event.likes.remove)(user)
-
                 total_likes = await sync_to_async(lambda: event.likes.count())()
-
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -41,7 +36,6 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-        # Handle gift
         elif "gift" in data and user.is_authenticated:
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -52,7 +46,6 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-        # Handle live_started
         elif data.get("live_started") is True:
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -78,6 +71,7 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "live_started"
         }))
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -129,7 +123,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "username": data["username"]
                     }
                 )
-
         except Exception as e:
             print(f"Error in receive: {e}")
 
@@ -177,21 +170,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
         event = Event.objects.get(id=self.event_id)
         ChatMessage.objects.create(event=event, username=username, message=message)
 
+
 class StreamConsumer(AsyncWebsocketConsumer):
-    organizers = {}  # class-level dict to track organizer channel per event_id
+    organizers = {}
 
     async def connect(self):
         self.event_id = self.scope["url_route"]["kwargs"]["event_id"]
         self.group_name = f"stream_{self.event_id}"
-
         user = self.scope["user"]
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        # Check if this user is the organizer (implement your own check here)
         if await self.is_organizer(user, self.event_id):
-            # Save organizer channel name for this event
             StreamConsumer.organizers[self.event_id] = self.channel_name
             self.is_organizer = True
         else:
@@ -199,9 +190,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-
         if self.is_organizer:
-            # Remove organizer record and notify viewers
             StreamConsumer.organizers.pop(self.event_id, None)
             await self.channel_layer.group_send(
                 self.group_name,
@@ -213,7 +202,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
         msg_type = data.get("type")
         user = self.scope["user"]
 
-        # Organizer sending answers or ICE candidates to viewers
         if self.is_organizer:
             if msg_type == "organizer_answer":
                 target_channel = data["target"]
@@ -238,14 +226,9 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     self.group_name,
                     {"type": "live_started"}
                 )
-            else:
-                # Unknown message from organizer
-                pass
-
-        else:  # Viewer sending offers and ICE candidates to organizer
+        else:
             organizer_channel = StreamConsumer.organizers.get(self.event_id)
-            if organizer_channel is None:
-                # Organizer not connected
+            if not organizer_channel:
                 await self.send(text_data=json.dumps({
                     "type": "error",
                     "message": "Organizer not connected"
@@ -270,9 +253,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
                         "viewer_id": self.channel_name
                     }
                 )
-            else:
-                # Unknown message from viewer
-                pass
 
     async def send_offer_to_organizer(self, event):
         if self.is_organizer:
@@ -310,7 +290,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
         }))
 
     async def organizer_left(self, event):
-        # Notify viewers that organizer left
         await self.send(text_data=json.dumps({
             "type": "organizer_left",
             "message": "Organizer has disconnected."
@@ -318,8 +297,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def is_organizer(self, user, event_id):
-        # Implement your logic to check if user is the event organizer
-        # Example: check if user.id == event.organizer_id
         Event = apps.get_model('core', 'Event')
         try:
             event = Event.objects.get(id=event_id)
