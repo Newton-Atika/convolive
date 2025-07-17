@@ -9,7 +9,6 @@ from .forms import EventForm, CustomUserCreationForm
 from .models import Event, LiveStatus,Gift
 from django.utils import timezone
 from datetime import timedelta
-
 @login_required
 def create_conversation(request):
     if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
