@@ -26,8 +26,10 @@
     }
     #localVideo, #viewerStream {
       width: 100%;
+      max-height: 60vh;
       border-radius: 10px;
       border: 2px solid limegreen;
+      object-fit: cover;
     }
     .chat {
       background-color: #111;
@@ -52,6 +54,13 @@
       font-weight: bold;
     }
     #likeBtn {
+      background-color: #000;
+      color: white;
+      border: 2px solid red;
+      font-weight: bold;
+      transition: background 0.3s, color 0.3s;
+    }
+    #likeBtn.liked {
       background-color: red;
       color: #fff;
     }
@@ -64,6 +73,15 @@
       background-color: orange;
       color: #000;
       font-weight: bold;
+    }
+    .mic-request-btn {
+      width: 100%;
+      background: #333;
+      color: white;
+      padding: 0.6rem;
+      margin-top: 0.5rem;
+      font-weight: bold;
+      border-radius: 5px;
     }
     .viewer-count {
       margin-bottom: 1rem;
@@ -120,7 +138,7 @@
       </form>
     {% else %}
       <div id="videoPlaceholder">🔒 Waiting for organizer’s live video...</div>
-      <video id="viewerStream" autoplay muted style="display:none;margin-top:10px;"></video>
+      <video id="viewerStream" autoplay playsinline muted style="display:none;margin-top:10px;"></video>
       <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
     {% endif %}
   </div>
@@ -263,6 +281,7 @@ async function startViewerStream() {
     if (vid && !vid.srcObject) {
       vid.srcObject = event.streams[0];
       vid.style.display = "block";
+      vid.muted = false;
     }
   };
 
@@ -290,13 +309,11 @@ function handleOrganizerIce(candidate) {
 }
 
 streamSocket.onopen = () => {
-  console.log("✅ Stream socket opened");
   if (isOrganizer) startOrganizerStream();
 };
 
 streamSocket.onmessage = async e => {
   const data = JSON.parse(e.data);
-  console.log("📡 Stream message:", data);
 
   if (data.type === "viewer_offer" && isOrganizer) {
     await handleViewerOffer(data.viewer_id, data.offer);
@@ -331,13 +348,13 @@ chatSocket.onmessage = event => {
     document.getElementById("requestList").appendChild(li);
   } else if (data.type === "mic_approved") {
     if (!isOrganizer && data.username === user) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
         localMicStream = stream;
         const video = document.getElementById("viewerStream");
         video.srcObject = stream;
         video.style.display = "block";
-        floatEmoji("🎤 You are live!");
-      }).catch(() => alert("Could not access microphone."));
+        floatEmoji("🎤🎥 You are live!");
+      }).catch(() => alert("Could not access camera/microphone."));
     } else {
       const el = document.getElementById(`mic-${data.username}`);
       if (el) el.remove();
@@ -349,9 +366,14 @@ chatSocket.onmessage = event => {
       if (el) el.remove();
     }
   } else if (data.type === "mic_revoked" && data.username === user) {
-    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
-    document.getElementById("viewerStream").style.display = "none";
-    alert("🔇 Your mic access was revoked.");
+    if (localMicStream) {
+      localMicStream.getTracks().forEach(t => t.stop());
+      localMicStream = null;
+    }
+    const video = document.getElementById("viewerStream");
+    video.srcObject = null;
+    video.style.display = "none";
+    alert("🔇 Your mic/video access was revoked.");
   }
 };
 
@@ -372,7 +394,6 @@ likeSocket.onmessage = event => {
   }
 };
 
-// Chat message sending
 document.getElementById("sendBtn").onclick = () => {
   const msg = document.getElementById("messageInput").value.trim();
   if (msg && chatSocket.readyState === WebSocket.OPEN) {
@@ -385,15 +406,14 @@ document.getElementById("messageInput").addEventListener("keypress", e => {
   if (e.key === "Enter") document.getElementById("sendBtn").click();
 });
 
-// Like button
 document.getElementById("likeBtn").onclick = () => {
   if (likeSocket.readyState === WebSocket.OPEN) {
     likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId }));
     liked = !liked;
+    document.getElementById("likeBtn").classList.toggle("liked", liked);
   }
 };
 
-// Mic control functions
 function approveMic(username) {
   chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
 }
@@ -404,12 +424,10 @@ function revokeMic(username) {
   chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
 }
 
-// Leave button
 document.getElementById("leaveChatBtn").onclick = () => {
   window.location.href = "{% url 'landing' %}";
 };
 
-// Mic request
 const micBtn = document.getElementById("requestMicBtn");
 if (micBtn) {
   micBtn.onclick = () => {
@@ -418,8 +436,6 @@ if (micBtn) {
   };
 }
 </script>
-
-
 
 </body>
 </html>
