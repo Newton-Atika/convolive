@@ -201,18 +201,12 @@ def join_event(request, event_id):
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
 
-    # ✅ Load conversation + messages (optional)
-    conversation = Conversation.objects.filter(event=event).order_by('-created_at').first()
-    messages = Message.objects.filter(conversation=conversation) if conversation else []
-    user_likes = Like.objects.filter(message__in=messages, user=request.user)
+
 
     return render(request, 'join_event.html', {
         'event': event,
         'participants': participants,
         'participant_count': participant_count,
-        'conversation': conversation,
-        'messages': messages,
-        'user_likes': user_likes,
         'mux_playback_id': event.mux_playback_id,  # ✅ Ensure this is passed
     })
 
