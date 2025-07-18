@@ -9,44 +9,75 @@ from .forms import EventForm, CustomUserCreationForm
 from .models import Event, LiveStatus,Gift
 from django.utils import timezone
 from datetime import timedelta
-@login_required
-def create_conversation(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
-        return render(request, 'not_authorized.html')
 
-    if request.method == 'POST':
-        form = EventForm(request.POST)
-        if form.is_valid():
-            event = form.save(commit=False)
-            event.organizer = request.user
-            event.is_live = False  # Force it to be a conversation
-            event.save()
-            LiveStatus.objects.create(event=event, is_active=True)
-            return redirect('organizer_dashboard')
-    else:
-        form = EventForm(initial={'is_live': False})
+import mux_python
+from mux_python.rest import ApiException
+from mux_python.models.create_asset_request import CreateAssetRequest
+from mux_python.models.create_playback_id_request import CreatePlaybackIDRequest
+from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
 
-    return render(request, 'create_conversation.html', {'form': form})
+configuration = mux_python.Configuration()
+configuration.username = settings.MUX_TOKEN_ID
+configuration.password = settings.MUX_TOKEN_SECRET
+# views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Event, LiveStatus, Conversation, Message, Like
+from .forms import EventForm, ConversationForm
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from django.conf import settings
 
+# Mux SDK imports
+import mux_python
+from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
+
+# Mux config
+configuration = mux_python.Configuration()
+configuration.username = settings.MUX_TOKEN_ID
+configuration.password = settings.MUX_TOKEN_SECRET
+mux_api = mux_python.LiveStreamsApi(mux_python.ApiClient(configuration))
 
 @login_required
 def create_event(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
-        return render(request, 'not_authorized.html')
-
     if request.method == 'POST':
-        form = EventForm(request.POST)
+        form = EventForm(request.POST, request.FILES)
         if form.is_valid():
             event = form.save(commit=False)
             event.organizer = request.user
             event.save()
-            LiveStatus.objects.create(event=event, is_active=True)
-            return redirect('organizer_dashboard')
+
+            # ✅ Create Mux Live Stream
+            mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
+                playback_policy=["public"],
+                new_asset_settings={"playback_policy": ["public"]}
+            ))
+
+            # ✅ Save Mux stream key and playback ID to event
+            event.mux_stream_key = mux_stream.data.stream_key
+            event.mux_playback_id = mux_stream.data.playback_ids[0].id
+            event.save()
+
+            return redirect('event_detail', event_id=event.id)
     else:
         form = EventForm()
 
     return render(request, 'create_event.html', {'form': form})
+@login_required
+def create_conversation(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
 
+    if request.method == 'POST':
+        form = ConversationForm(request.POST)
+        if form.is_valid():
+            conversation = form.save(commit=False)
+            conversation.event = event
+            conversation.creator = request.user
+            conversation.save()
+            return redirect('conversation_detail', event_id=event.id, conversation_id=conversation.id)
+    else:
+        form = ConversationForm()
+
+    return render(request, 'create_conversation.html', {'form': form, 'event': event})
 
 # views.py
 from django.views.decorators.csrf import csrf_exempt
@@ -145,33 +176,28 @@ from django.shortcuts import redirect
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
 
-    try:
-        status = LiveStatus.objects.get(event=event)
-        if not status.is_active:
-            return render(request, 'live_has_ended.html', {'event': event})
-    except LiveStatus.DoesNotExist:
-        pass
+    # ✅ Create LiveStatus if it doesn't exist for the event
+    live_status, created = LiveStatus.objects.get_or_create(event=event)
 
-    # ✅ If event is a conversation (is_live == False), check payment
-    if not event.is_live:
-        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
-        if not has_paid:
-            # 🚫 Redirect unpaid user to the payment page
-            return redirect('pay_event', event_id=event.id)
+    # ✅ Add participant if not already in
+    if request.user not in live_status.participants.all():
+        live_status.participants.add(request.user)
+        live_status.save()
 
-    # Add participant if not already joined
-    LiveParticipant.objects.get_or_create(event=event, user=request.user)
+    participant_count = live_status.participants.count()
 
-    participants = []
-    participant_count = LiveParticipant.objects.filter(event=event).count()
-
-    if request.user == event.organizer:
-        participants = LiveParticipant.objects.filter(event=event).select_related('user')
+    # ✅ Get latest conversation
+    conversation = Conversation.objects.filter(event=event).order_by('-created_at').first()
+    messages = Message.objects.filter(conversation=conversation) if conversation else []
+    user_likes = Like.objects.filter(message__in=messages, user=request.user)
 
     return render(request, 'join_event.html', {
         'event': event,
-        'participants': participants,
+        'conversation': conversation,
+        'messages': messages,
         'participant_count': participant_count,
+        'user_likes': user_likes,
+        'mux_playback_id': event.mux_playback_id,  # ✅ pass to template
     })
 
 
