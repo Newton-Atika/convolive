@@ -168,35 +168,52 @@ def verify_gift_payment(request):
         return render(request, "payment_error.html", {"error": str(e), "event": event})
 
 
-from .models import LiveParticipant, Payment  # import the model
-from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, get_object_or_404, redirect
+from .models import Event, LiveStatus, LiveParticipant, Payment, Conversation, Message, Like
 
 @login_required
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
 
-    # ✅ Create LiveStatus if it doesn't exist for the event
-    live_status, created = LiveStatus.objects.get_or_create(event=event)
+    # ✅ Check if the live has ended
+    try:
+        status = LiveStatus.objects.get(event=event)
+        if not status.is_active:
+            return render(request, 'live_has_ended.html', {'event': event})
+    except LiveStatus.DoesNotExist:
+        pass
 
-    # ✅ Add participant if not already in
-    if request.user not in live_status.participants.all():
-        live_status.participants.add(request.user)
-        live_status.save()
+    # ✅ If the event is not live (i.e., a conversation), ensure payment is made
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            return redirect('pay_event', event_id=event.id)
 
-    participant_count = live_status.participants.count()
+    # ✅ Add the user as a live participant (or do nothing if already added)
+    LiveParticipant.objects.get_or_create(event=event, user=request.user)
 
-    # ✅ Get latest conversation
+    # ✅ Get participant count
+    participant_count = LiveParticipant.objects.filter(event=event).count()
+
+    # ✅ If organizer, list all participants
+    participants = []
+    if request.user == event.organizer:
+        participants = LiveParticipant.objects.filter(event=event).select_related('user')
+
+    # ✅ Load conversation + messages (optional)
     conversation = Conversation.objects.filter(event=event).order_by('-created_at').first()
     messages = Message.objects.filter(conversation=conversation) if conversation else []
     user_likes = Like.objects.filter(message__in=messages, user=request.user)
 
     return render(request, 'join_event.html', {
         'event': event,
+        'participants': participants,
+        'participant_count': participant_count,
         'conversation': conversation,
         'messages': messages,
-        'participant_count': participant_count,
         'user_likes': user_likes,
-        'mux_playback_id': event.mux_playback_id,  # ✅ pass to template
+        'mux_playback_id': event.mux_playback_id,  # ✅ Ensure this is passed
     })
 
 
