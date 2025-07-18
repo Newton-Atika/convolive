@@ -130,19 +130,33 @@
   <h1>🎥 {{ event.title }}</h1>
 
 <div class="video-box">
-    {% if user.pk == event.organizer.pk %}
-      <video id="localVideo" autoplay muted playsinline></video>
-      <form method="post" action="{% url 'end_event' event.id %}">
-        {% csrf_token %}
-        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
-      </form>
+  {% if user.pk == event.organizer.pk %}
+    <video id="localVideo" autoplay muted playsinline></video>
+    <form method="post" action="{% url 'end_event' event.id %}">
+      {% csrf_token %}
+      <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
+    </form>
+    <p>Stream Key: <strong>{{ event.mux_stream_key }}</strong></p>
+    <p>Use this in OBS or broadcasting software to go live.</p>
+  {% else %}
+    <div id="videoPlaceholder">🔴 Waiting for organizer’s live video...</div>
+    {% if event.mux_playback_id %}
+      <video
+        id="viewerStream"
+        autoplay
+        controls
+        playsinline
+        style="width:100%;border-radius:1rem;"
+        src="https://stream.mux.com/{{ event.mux_playback_id }}.m3u8">
+      </video>
     {% else %}
-      <div id="videoPlaceholder">🔒 Waiting for organizer’s live video...</div>
-      <video id="viewerStream" autoplay playsinline style="display:none;"></video>
-      <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
-      <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
+      <p>Live stream not yet started.</p>
     {% endif %}
-  </div>
+    <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
+    <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
+  {% endif %}
+</div>
+
 
 
   <div class="viewer-count">
