@@ -1,6 +1,15 @@
 import mux_python
 from mux_python.rest import ApiException
 from django.conf import settings
+# somewhere global, e.g. utils/mux.py
+from mux_python import Configuration, ApiClient, LiveStreamsApi
+import os
+
+configuration = Configuration()
+configuration.username = settings.MUX_TOKEN_ID
+configuration.password = settings.MUX_TOKEN_SECRET
+api_client = ApiClient(configuration)
+mux_api = LiveStreamsApi(api_client)
 
 def create_mux_stream():
     configuration = mux_python.Configuration()
