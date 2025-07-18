@@ -223,10 +223,14 @@ function giftLabel(value) {
 async function startOrganizerStream() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    console.log("📸 Organizer got local stream:", localStream);
     document.getElementById("localVideo").srcObject = localStream;
 
     streamReady = true;
+
+    // Process any queued offers
     for (const viewerId in pendingOffers) {
+      console.log("📡 Organizer processing pending offer from:", viewerId);
       await handleViewerOffer(viewerId, pendingOffers[viewerId]);
       delete pendingOffers[viewerId];
     }
@@ -240,10 +244,15 @@ async function startOrganizerStream() {
 }
 
 async function handleViewerOffer(viewerId, offer) {
+  console.log("📡 Organizer received offer from:", viewerId);
   const pc = new RTCPeerConnection(iceServers);
   peerConnections[viewerId] = pc;
 
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  localStream.getTracks().forEach(track => {
+    pc.addTrack(track, localStream);
+    console.log("🔗 Organizer added track:", track);
+  });
+
   pc.onicecandidate = e => {
     if (e.candidate) {
       streamSocket.send(JSON.stringify({
@@ -279,18 +288,20 @@ async function startViewerStream() {
   };
 
   pc.ontrack = event => {
-    const vid = document.getElementById("viewerStream");
     const [stream] = event.streams;
-    if (vid) {
+    const vid = document.getElementById("viewerStream");
+    if (vid && stream) {
+      console.log("🎥 Viewer received stream:", stream);
       vid.srcObject = stream;
       vid.style.display = "block";
       vid.muted = false;
-      console.log("🎥 Viewer received stream");
+      document.getElementById("videoPlaceholder")?.remove();
     }
   };
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  console.log("📡 Viewer sending offer");
   streamSocket.send(JSON.stringify({
     type: "viewer_offer", viewer_id: user, offer: pc.localDescription
   }));
@@ -298,7 +309,8 @@ async function startViewerStream() {
 
 async function handleOrganizerAnswer(answer) {
   const pc = peerConnections["organizer"];
-  if (!pc) return console.warn("No PC for organizer");
+  if (!pc) return console.warn("⚠️ No PC for organizer");
+  console.log("📲 Viewer received organizer's answer");
   await pc.setRemoteDescription(new RTCSessionDescription(answer));
 }
 
@@ -319,13 +331,16 @@ streamSocket.onmessage = async e => {
   const data = JSON.parse(e.data);
 
   if (data.type === "viewer_offer" && isOrganizer) {
+    console.log("🛰 Organizer received viewer_offer");
     if (!streamReady) {
+      console.log("⏳ Stream not ready, queuing offer for", data.viewer_id);
       pendingOffers[data.viewer_id] = data.offer;
       return;
     }
     await handleViewerOffer(data.viewer_id, data.offer);
 
   } else if (data.type === "organizer_answer" && !isOrganizer) {
+    console.log("📲 Viewer received organizer_answer");
     await handleOrganizerAnswer(data.answer);
 
   } else if (data.type === "viewer_ice" && isOrganizer) {
@@ -335,7 +350,7 @@ streamSocket.onmessage = async e => {
     handleOrganizerIce(data.candidate);
 
   } else if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
-    document.getElementById("videoPlaceholder")?.remove();
+    console.log("🚀 Viewer received live_started signal");
     startViewerStream();
   }
 };
@@ -343,7 +358,6 @@ streamSocket.onmessage = async e => {
 // CHAT SOCKET
 chatSocket.onmessage = event => {
   const data = JSON.parse(event.data);
-
   if (data.type === "chat") {
     const p = document.createElement("p");
     p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
@@ -451,6 +465,7 @@ if (micBtn) {
   };
 }
 </script>
+
 
 
 </body>
