@@ -21,7 +21,7 @@ configuration.username = settings.MUX_TOKEN_ID
 configuration.password = settings.MUX_TOKEN_SECRET
 # views.py
 from django.shortcuts import render, redirect, get_object_or_404
-from .forms import EventForm, ConversationForm
+from .forms import EventForm
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.conf import settings
