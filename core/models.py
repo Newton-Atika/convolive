@@ -27,7 +27,8 @@ class Event(models.Model):
     is_live = models.BooleanField(default=False)
     start_time = models.DateTimeField()
     likes = models.ManyToManyField(User, related_name='liked_events', blank=True)
-
+    mux_stream_key = models.CharField(max_length=255, null=True, blank=True)
+    mux_playback_id = models.CharField(max_length=255, null=True, blank=True)
     def total_likes(self):
         return self.likes.count()
 
