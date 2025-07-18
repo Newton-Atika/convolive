@@ -36,7 +36,9 @@ configuration.username = settings.MUX_TOKEN_ID
 configuration.password = settings.MUX_TOKEN_SECRET
 mux_api = mux_python.LiveStreamsApi(mux_python.ApiClient(configuration))
 
-@login_required
+from mux_python.models import CreateLiveStreamRequest
+from .utils.mux import mux_api
+
 def create_event(request):
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES)
@@ -48,10 +50,11 @@ def create_event(request):
             # ✅ Create Mux Live Stream
             mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
                 playback_policy=["public"],
-                new_asset_settings={"playback_policy": ["public"]}
+                new_asset_settings={"playback_policy": ["public"]},
+                test=False  # Set to True for testing without cost
             ))
 
-            # ✅ Save Mux stream key and playback ID to event
+            # ✅ Save stream info
             event.mux_stream_key = mux_stream.data.stream_key
             event.mux_playback_id = mux_stream.data.playback_ids[0].id
             event.save()
@@ -61,6 +64,7 @@ def create_event(request):
         form = EventForm()
 
     return render(request, 'create_event.html', {'form': form})
+
 @login_required
 def create_conversation(request, event_id):
     event = get_object_or_404(Event, id=event_id)
