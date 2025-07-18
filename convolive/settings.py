@@ -141,6 +141,8 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+MUX_TOKEN_ID="65797142-a2e0-470e-958f-bb4815900543"
+MUX_TOKEN_SECRET="3NWHhMxwOs1pT3qRHIl8Qv94oJhbWL19tXfW5RHUMSLugYoSYCCv93NTDrZ1dOuyBkg/6UEFCAY"
 
 # Add this if not already present
 TEMPLATES[0]['DIRS'] = [os.path.join(BASE_DIR, 'templates')]
