@@ -9,7 +9,7 @@ from .forms import EventForm, CustomUserCreationForm
 from .models import Event, LiveStatus,Gift
 from django.utils import timezone
 from datetime import timedelta
-
+from django.conf import settings
 import mux_python
 from mux_python.rest import ApiException
 from mux_python.models.create_asset_request import CreateAssetRequest
