@@ -170,7 +170,7 @@ def verify_gift_payment(request):
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Event, LiveStatus, LiveParticipant, Payment, Conversation, Message, Like
+from .models import Event, LiveStatus, LiveParticipant, Payment
 
 @login_required
 def join_event(request, event_id):
