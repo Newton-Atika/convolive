@@ -19,6 +19,6 @@ urlpatterns = [
     path('event/<int:event_id>/', views.event_detail, name='event_detail'),
     path('stream/<int:event_id>/', views.stream_view, name='stream'),
     path('toggle-like/', views.toggle_like, name='toggle_like'),
-    path('livekit/token/<int:event_id>/', generate_token, name='get_livekit_token'),
+    path('livekit/token/<int:event_id>/', views.generate_token, name='get_livekit_token'),
     path('stream/<str:room_name>/', views.stream_view, name='stream'),
 ]
