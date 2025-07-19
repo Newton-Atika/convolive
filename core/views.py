@@ -84,6 +84,9 @@ def generate_agora_token(channel, uid, role):
         if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
             logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
             raise ValueError("Invalid token format")
+        if not token.startswith("006" + AGORA_APP_ID):
+            logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
+            raise ValueError("Token prefix invalid")
         return token
     except Exception as e:
         logger.error(f"Token generation failed: {str(e)}")
