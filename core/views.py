@@ -42,7 +42,7 @@ from .utils.mux import mux_api
 from django.http import JsonResponse
 from .utils.livekit_utils import create_token
 # views.py
-from livekit import AccessToken, RoomServiceClient
+
 from django.http import JsonResponse
 from django.conf import settings
 
@@ -50,23 +50,34 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.conf import settings
 from .models import Event
-from livekit import AccessToken
+import jwt
+import time
+import os
+from django.conf import settings
+
 
 def create_token(identity, room, can_publish=False):
-    at = AccessToken(
-        settings.LIVEKIT_API_KEY,
-        settings.LIVEKIT_API_SECRET,
-        identity=identity,
-    )
+    now = int(time.time())
+    exp = now + 3600  # Token valid for 1 hour
 
-    at.add_grant({
-        "roomJoin": True,
-        "room": room,
-        "canPublish": can_publish,
-        "canSubscribe": True
-    })
+    payload = {
+        "jti": f"{identity}-{now}",
+        "iss": settings.LIVEKIT_API_KEY,
+        "sub": identity,
+        "aud": "livekit",
+        "exp": exp,
+        "nbf": now,
+        "video": {
+            "roomJoin": True,
+            "room": room,
+            "canPublish": can_publish,
+            "canSubscribe": True,
+        },
+    }
 
-    return at.to_jwt()
+    token = jwt.encode(payload, settings.LIVEKIT_API_SECRET, algorithm="HS256")
+    return token
+
 
 def get_livekit_token(request, event_id):
     user = request.user
