@@ -69,9 +69,20 @@ import json
 from .models import Event, LiveStatus, LiveParticipant, Payment
 import os
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+import hmac
+import hashlib
+import time
+import base64
+import json
+from .models import Event, LiveStatus, LiveParticipant, Payment
+import os
+
 # Hardcoded or environment variables for security
-AGORA_APP_ID = '5a7551a1892a47258b7e9f7f264e6196'
-AGORA_APP_CERTIFICATE = '27b20c8f267e4235b207d6aef1bf7dea'
+AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
+AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
 
 def generate_agora_token(channel, uid, role):
     """Generate an Agora AccessToken2 manually."""
@@ -89,8 +100,10 @@ def generate_agora_token(channel, uid, role):
         }
     }
 
-    # Token version and signature
+    # Token version
     version = 1
+
+    # Content to sign
     content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
     signature = hmac.new(
         AGORA_APP_CERTIFICATE.encode('utf-8'),
@@ -98,24 +111,27 @@ def generate_agora_token(channel, uid, role):
         hashlib.sha256
     ).digest()
 
-    # Pack token
-    token = (
-        base64.urlsafe_b64encode(signature).rstrip(b'=').decode('utf-8') + ':' +
-        base64.urlsafe_b64encode(str(version).encode('utf-8')).rstrip(b'=').decode('utf-8') + ':' +
-        base64.urlsafe_b64encode(str(expire_timestamp).encode('utf-8')).rstrip(b'=').decode('utf-8') + ':' +
-        base64.urlsafe_b64encode(content.encode('utf-8')).rstrip(b'=').decode('utf-8')
-    )
-    return f"006{AGORA_APP_ID}{token}"
+    # Encode components
+    signature_base64 = base64.b64encode(signature).decode('utf-8').rstrip('=')
+    version_base64 = base64.b64encode(str(version).encode('utf-8')).decode('utf-8').rstrip('=')
+    expire_base64 = base64.b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8').rstrip('=')
+    content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8').rstrip('=')
+
+    # Construct token
+    token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
+    return token
 
 @login_required
 def get_agora_token(request):
     """Endpoint to get Agora token."""
     channel = request.GET.get('channel')
     organizer_id = request.GET.get('organizer_id')
-    uid = str(int(time.time() * 1000))  # Unique ID based on timestamp
+    if not channel or not organizer_id:
+        return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
+    uid = 0  # Default UID, can be adjusted or randomized
     role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
     token = generate_agora_token(channel, uid, role)
-    return JsonResponse({'token': token, 'uid': uid})
+    return JsonResponse({'token': token})
 
 @login_required
 def join_event(request, event_id):
@@ -153,7 +169,6 @@ def join_event(request, event_id):
         'organizer_id': event.organizer.pk,  # ✅ Added for Agora token generation
         'mux_playback_id': event.mux_playback_id,  # ✅ Kept for compatibility
     })
-
 def create_token(identity, room, can_publish=False):
     now = int(time.time())
     exp = now + 3600  # Token valid for 1 hour
