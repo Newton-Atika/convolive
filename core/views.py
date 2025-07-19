@@ -66,22 +66,21 @@ AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207
 def generate_agora_token(channel, uid, role):
     """Generate an Agora AccessToken2 manually."""
     try:
+        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
+        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
+
         # Expiration time (1 hour from now)
         expiration_in_seconds = 3600
         current_timestamp = int(time.time())
         expire_timestamp = current_timestamp + expiration_in_seconds
+        logger.debug(f"Timestamps: current={current_timestamp}, expire={expire_timestamp}")
 
-        # Privilege flags (adjust based on role)
+        # Privilege flags
         privileges = {
-            'g': 1 if role == 'publisher' else 0,  # Join channel
-            'publish': {
-                'audio': 1 if role == 'publisher' else 0,
-                'video': 1 if role == 'publisher' else 0,
-            }
+            'g': 1 if role == 'publisher' else 0,
+            'publish': {'audio': 1 if role == 'publisher' else 0, 'video': 1 if role == 'publisher' else 0}
         }
-
-        # Token version
-        version = 1
+        logger.debug(f"Privileges: {privileges}")
 
         # Content to sign
         content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
@@ -90,12 +89,14 @@ def generate_agora_token(channel, uid, role):
             content.encode('utf-8'),
             hashlib.sha256
         ).digest()
+        logger.debug(f"Signature length: {len(signature)}")
 
         # Encode components
         signature_base64 = base64.urlsafe_b64encode(signature).decode('utf-8').rstrip('=')
-        version_base64 = base64.urlsafe_b64encode(str(version).encode('utf-8')).decode('utf-8').rstrip('=')
+        version_base64 = base64.urlsafe_b64encode(b'1').decode('utf-8').rstrip('=')
         expire_base64 = base64.urlsafe_b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8').rstrip('=')
         content_base64 = base64.urlsafe_b64encode(content.encode('utf-8')).decode('utf-8').rstrip('=')
+        logger.debug(f"Base64 lengths: sig={len(signature_base64)}, ver={len(version_base64)}, exp={len(expire_base64)}, cont={len(content_base64)}")
 
         # Construct token
         token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
@@ -114,9 +115,10 @@ def get_agora_token(request):
     try:
         channel = request.GET.get('channel')
         organizer_id = request.GET.get('organizer_id')
+        logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
         if not channel or not organizer_id:
             return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-        uid = 0  # Default UID
+        uid = 0
         role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
         token = generate_agora_token(channel, uid, role)
         return JsonResponse({'token': token})
@@ -136,13 +138,13 @@ def join_event(request, event_id):
     except LiveStatus.DoesNotExist:
         pass
 
-    # ✅ If the event is not live (i.e., a conversation), ensure payment is made
+    # ✅ If the event is not live, ensure payment is made
     if not event.is_live:
         has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
         if not has_paid:
             return redirect('pay_event', event_id=event.id)
 
-    # ✅ Add the user as a live participant (or do nothing if already added)
+    # ✅ Add the user as a live participant
     LiveParticipant.objects.get_or_create(event=event, user=request.user)
 
     # ✅ Get participant count
