@@ -200,11 +200,13 @@
       microphoneId: null,
       cameraId: null
     });
-    await rtc.client.publish(rtc.localStream);
-    const localVideo = document.getElementById('localVideo');
-    localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
-    localVideo.style.display = 'block';
-    await rtc.client.join(token, CHANNEL, uid, (uid) => console.log('User ' + uid + ' joined as host'));
+    await rtc.client.join(token, CHANNEL, uid, async (uid) => {
+      console.log('User ' + uid + ' joined as host');
+      await rtc.client.publish(rtc.localStream);
+      const localVideo = document.getElementById('localVideo');
+      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
+      localVideo.style.display = 'block';
+    });
   }
 
   // Join channel for viewers
