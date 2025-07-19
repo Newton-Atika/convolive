@@ -61,7 +61,7 @@ from django.http import JsonResponse
 import time
 import os
 import logging
-from agora_token_builder import RtcTokenBuilder  # Install with pip install agora-token-service
+from agora_token_builder import RtcTokenBuilder
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -90,6 +90,7 @@ def generate_agora_token(channel, uid, role):
 
 @login_required
 def get_agora_token(request):
+    """Endpoint to get Agora token."""
     try:
         channel = request.GET.get('channel')
         organizer_id = request.GET.get('organizer_id')
@@ -99,7 +100,6 @@ def get_agora_token(request):
         uid = 0
         role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
         token = generate_agora_token(channel, uid, role)
-        print(f"DEBUG: Token generated: {token[:50]}...")  # Force stdout
         return JsonResponse({'token': token})
     except Exception as e:
         logger.error(f"Token endpoint error: {str(e)}")
