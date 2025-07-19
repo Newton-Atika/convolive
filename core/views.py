@@ -43,21 +43,6 @@ from django.http import JsonResponse
 from .utils.livekit_utils import create_token
 # views.py
 
-from django.http import JsonResponse
-from django.conf import settings
-
-# views.py
-from django.http import JsonResponse
-from django.conf import settings
-from .models import Event
-import jwt
-import time
-import os
-from django.conf import settings
-from django.http import JsonResponse
-import time
-import os
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -68,17 +53,11 @@ import base64
 import json
 from .models import Event, LiveStatus, LiveParticipant, Payment
 import os
+import logging
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-import hmac
-import hashlib
-import time
-import base64
-import json
-from .models import Event, LiveStatus, LiveParticipant, Payment
-import os
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Hardcoded or environment variables for security
 AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
@@ -86,52 +65,64 @@ AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207
 
 def generate_agora_token(channel, uid, role):
     """Generate an Agora AccessToken2 manually."""
-    # Expiration time (1 hour from now)
-    expiration_in_seconds = 3600
-    current_timestamp = int(time.time())
-    expire_timestamp = current_timestamp + expiration_in_seconds
+    try:
+        # Expiration time (1 hour from now)
+        expiration_in_seconds = 3600
+        current_timestamp = int(time.time())
+        expire_timestamp = current_timestamp + expiration_in_seconds
 
-    # Privilege flags (adjust based on role)
-    privileges = {
-        'g': 1 if role == 'publisher' else 0,  # Join channel
-        'publish': {
-            'audio': 1 if role == 'publisher' else 0,
-            'video': 1 if role == 'publisher' else 0,
+        # Privilege flags (adjust based on role)
+        privileges = {
+            'g': 1 if role == 'publisher' else 0,  # Join channel
+            'publish': {
+                'audio': 1 if role == 'publisher' else 0,
+                'video': 1 if role == 'publisher' else 0,
+            }
         }
-    }
 
-    # Token version
-    version = 1
+        # Token version
+        version = 1
 
-    # Content to sign
-    content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
-    signature = hmac.new(
-        AGORA_APP_CERTIFICATE.encode('utf-8'),
-        content.encode('utf-8'),
-        hashlib.sha256
-    ).digest()
+        # Content to sign
+        content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
+        signature = hmac.new(
+            AGORA_APP_CERTIFICATE.encode('utf-8'),
+            content.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
 
-    # Encode components
-    signature_base64 = base64.b64encode(signature).decode('utf-8').rstrip('=')
-    version_base64 = base64.b64encode(str(version).encode('utf-8')).decode('utf-8').rstrip('=')
-    expire_base64 = base64.b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8').rstrip('=')
-    content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8').rstrip('=')
+        # Encode components without stripping padding
+        signature_base64 = base64.b64encode(signature).decode('utf-8')
+        version_base64 = base64.b64encode(str(version).encode('utf-8')).decode('utf-8')
+        expire_base64 = base64.b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8')
+        content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
 
-    # Construct token
-    token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
-    return token
+        # Construct token
+        token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
+        logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
+        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
+            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
+            raise ValueError("Invalid token format")
+        return token
+    except Exception as e:
+        logger.error(f"Token generation failed: {str(e)}")
+        raise
 
 @login_required
 def get_agora_token(request):
     """Endpoint to get Agora token."""
-    channel = request.GET.get('channel')
-    organizer_id = request.GET.get('organizer_id')
-    if not channel or not organizer_id:
-        return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-    uid = 0  # Default UID, can be adjusted or randomized
-    role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
-    token = generate_agora_token(channel, uid, role)
-    return JsonResponse({'token': token})
+    try:
+        channel = request.GET.get('channel')
+        organizer_id = request.GET.get('organizer_id')
+        if not channel or not organizer_id:
+            return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
+        uid = 0  # Default UID, can be adjusted or randomized
+        role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
+        token = generate_agora_token(channel, uid, role)
+        return JsonResponse({'token': token})
+    except Exception as e:
+        logger.error(f"Token endpoint error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
 
 @login_required
 def join_event(request, event_id):
