@@ -55,6 +55,14 @@ from .models import Event, LiveStatus, LiveParticipant, Payment
 import os
 import logging
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+import time
+import os
+import logging
+from agora_token_builder import RtcTokenBuilder  # Install with pip install agora-token-service
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -63,15 +71,22 @@ logger = logging.getLogger(__name__)
 AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
 AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
 
-from agora_token_builder import RtcTokenBuilder
 def generate_agora_token(channel, uid, role):
-    app_id = AGORA_APP_ID
-    app_certificate = AGORA_APP_CERTIFICATE
-    expiration = int(time.time()) + 3600
-    role = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
-    token = RtcTokenBuilder.buildTokenWithUid(app_id, app_certificate, channel, uid, role, expiration)
-    logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
-    return token
+    """Generate an Agora AccessToken2 using the official SDK."""
+    try:
+        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
+        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
+        expiration = int(time.time()) + 3600
+        role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
+        token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
+        logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
+        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
+            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
+            raise ValueError("Invalid token format")
+        return token
+    except Exception as e:
+        logger.error(f"Token generation failed: {str(e)}")
+        raise
 
 @login_required
 def get_agora_token(request):
