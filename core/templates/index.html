@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <title>{{ event.title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Agora Web SDK -->
-  <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+  <!-- Agora Web SDK (latest version) -->
+  <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N.js"></script>
 
   <style>
     body {
@@ -80,6 +80,18 @@
     .viewer-count {
       margin-bottom: 1rem;
     }
+    .float-emoji {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.5rem;
+      animation: float 4s ease-in-out forwards;
+    }
+    @keyframes float {
+      0% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -100px); }
+    }
   </style>
 </head>
 <body>
@@ -101,7 +113,7 @@
     </div>
 
     {% if user.pk == event.organizer.pk %}
-      <form method="post" action="{% url 'end_event' event.id %}">
+      <form method="post" action="{% url 'end_event event.id %}">
         {% csrf_token %}
         <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
       </form>
@@ -158,30 +170,30 @@
     remoteStream: null
   };
 
-  // Generate a random UID between 0 and 10000
-  function getRandomUid() {
-    return Math.floor(Math.random() * 10001); // 0 to 10000 inclusive
-  }
-
   // Initialize Agora client and fetch token
-async function initAgora() {
-  rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-  const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-  if (!resp.ok) throw new Error('Failed to fetch Agora token');
-  const { token } = await resp.json();
-  const uid = getRandomUid();
+  async function initAgora() {
+    console.log('Initializing Agora with channel:', CHANNEL, 'organizerId:', organizerId);
+    rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+    const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      throw new Error(`Failed to fetch Agora token: ${errorText}`);
+    }
+    const { token, uid } = await resp.json();
+    console.log('Received token:', token, 'uid:', uid);
 
-  if (isOrganizer) {
-    rtc.client.setClientRole('host');
-    await startLocalStream(token, uid);
-  } else {
-    rtc.client.setClientRole('audience');
-    await joinChannel(token, uid);
-  }
+    if (isOrganizer) {
+      rtc.client.setClientRole('host');
+      await startLocalStream(token, uid);
+    } else {
+      rtc.client.setClientRole('audience');
+      await joinChannel(token, uid);
+    }
 
     rtc.client.on('stream-added', (evt) => {
       const stream = evt.stream;
-      rtc.client.subscribe(stream, (err) => console.log('Subscribe failed', err));
+      console.log('Stream added:', stream.getId());
+      rtc.client.subscribe(stream, (err) => console.error('Subscribe failed', err));
     });
 
     rtc.client.on('stream-subscribed', (evt) => {
@@ -190,43 +202,61 @@ async function initAgora() {
       const remoteVideo = document.getElementById('remoteVideo');
       remoteVideo.srcObject = new MediaStream(remoteStream.getTracks());
       remoteVideo.style.display = 'block';
+      console.log('Stream subscribed:', remoteStream.getId());
     });
 
     rtc.client.on('peer-leave', () => {
       if (rtc.remoteStream) {
         rtc.remoteStream.close();
         document.getElementById('remoteVideo').style.display = 'none';
+        console.log('Remote peer left');
       }
     });
   }
 
   // Start local stream for organizer
   async function startLocalStream(token, uid) {
-    [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
-      microphoneId: null,
-      cameraId: null
-    });
-    await rtc.client.join(token, CHANNEL, uid, async (uid) => {
-      console.log('User ' + uid + ' joined as host');
-      await rtc.client.publish(rtc.localStream);
-      const localVideo = document.getElementById('localVideo');
-      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
-      localVideo.style.display = 'block';
-    });
+    try {
+      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
+        microphoneId: null,
+        cameraId: null
+      });
+      await rtc.client.join(token, CHANNEL, uid, async (uid) => {
+        console.log('User ' + uid + ' joined as host');
+        await rtc.client.publish(rtc.localStream);
+        const localVideo = document.getElementById('localVideo');
+        localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
+        localVideo.style.display = 'block';
+      });
+    } catch (err) {
+      console.error('Start local stream failed:', err);
+      throw err;
+    }
   }
 
   // Join channel for viewers
   async function joinChannel(token, uid) {
-    await rtc.client.join(token, CHANNEL, uid, (uid) => {
-      console.log('User ' + uid + ' joined channel ' + CHANNEL + ' as audience');
-    }, (err) => console.error('Join channel failed', err));
+    try {
+      await rtc.client.join(token, CHANNEL, uid, (uid) => {
+        console.log('User ' + uid + ' joined channel ' + CHANNEL + ' as audience');
+      });
+    } catch (err) {
+      console.error('Join channel failed:', err);
+      throw err;
+    }
   }
 
   // Leave channel
   function leaveChannel() {
-    if (rtc.localStream) rtc.localStream.close();
-    if (rtc.remoteStream) rtc.remoteStream.close();
-    rtc.client.leave(() => console.log('Channel left'), (err) => console.error(err));
+    if (rtc.localStream) {
+      rtc.localStream.close();
+      console.log('Local stream closed');
+    }
+    if (rtc.remoteStream) {
+      rtc.remoteStream.close();
+      console.log('Remote stream closed');
+    }
+    rtc.client.leave(() => console.log('Channel left'), (err) => console.error('Leave failed:', err));
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
@@ -235,7 +265,7 @@ async function initAgora() {
   window.onload = () => {
     initAgora().catch(err => {
       console.error('Agora initialization error:', err);
-      alert('Failed to initialize Agora. Check console for details.');
+      alert(`Failed to initialize video stream: ${err.message}. Please try again or contact support.`);
     });
   };
 
@@ -271,10 +301,10 @@ async function initAgora() {
     }
   }
 
-  // Stream handling (simplified for Agora)
+  // Stream handling
   streamSocket.onopen = () => {
+    console.log('Stream socket opened');
     if (isOrganizer) {
-      // Stream started via Agora
       streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
     } else {
       streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user }));
@@ -283,13 +313,17 @@ async function initAgora() {
 
   streamSocket.onmessage = async (e) => {
     const data = JSON.parse(e.data);
+    console.log('Stream socket message:', data);
     if (data.type === "live_started" && !isOrganizer) {
       console.log("🚀 Viewer received live_started signal");
-      const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-      if (!resp.ok) throw new Error('Failed to fetch Agora token');
-      const { token } = await resp.json();
-      const uid = getRandomUid();
-      await joinChannel(token, uid);
+      try {
+        const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+        if (!resp.ok) throw new Error('Failed to fetch Agora token');
+        const { token, uid } = await resp.json();
+        await joinChannel(token, uid);
+      } catch (err) {
+        console.error('Failed to join channel on live_started:', err);
+      }
     }
   };
 
@@ -319,7 +353,10 @@ async function initAgora() {
             video.style.display = "block";
             floatEmoji("🎤🎥 You are live!");
           })
-          .catch(() => alert("Could not access camera/microphone."));
+          .catch((err) => {
+            console.error('Media device access failed:', err);
+            alert("Could not access camera/microphone.");
+          });
       } else {
         document.getElementById(`mic-${data.username}`)?.remove();
       }
