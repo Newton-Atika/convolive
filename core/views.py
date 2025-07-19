@@ -91,11 +91,11 @@ def generate_agora_token(channel, uid, role):
             hashlib.sha256
         ).digest()
 
-        # Encode components without stripping padding
-        signature_base64 = base64.b64encode(signature).decode('utf-8')
-        version_base64 = base64.b64encode(str(version).encode('utf-8')).decode('utf-8')
-        expire_base64 = base64.b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8')
-        content_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+        # Encode components
+        signature_base64 = base64.urlsafe_b64encode(signature).decode('utf-8').rstrip('=')
+        version_base64 = base64.urlsafe_b64encode(str(version).encode('utf-8')).decode('utf-8').rstrip('=')
+        expire_base64 = base64.urlsafe_b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8').rstrip('=')
+        content_base64 = base64.urlsafe_b64encode(content.encode('utf-8')).decode('utf-8').rstrip('=')
 
         # Construct token
         token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
@@ -116,7 +116,7 @@ def get_agora_token(request):
         organizer_id = request.GET.get('organizer_id')
         if not channel or not organizer_id:
             return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-        uid = 0  # Default UID, can be adjusted or randomized
+        uid = 0  # Default UID
         role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
         token = generate_agora_token(channel, uid, role)
         return JsonResponse({'token': token})
@@ -157,8 +157,8 @@ def join_event(request, event_id):
         'event': event,
         'participants': participants,
         'participant_count': participant_count,
-        'organizer_id': event.organizer.pk,  # ✅ Added for Agora token generation
-        'mux_playback_id': event.mux_playback_id,  # ✅ Kept for compatibility
+        'organizer_id': event.organizer.pk,
+        'mux_playback_id': event.mux_playback_id,
     })
 def create_token(identity, room, can_publish=False):
     now = int(time.time())
