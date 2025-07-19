@@ -39,6 +39,16 @@ mux_api = mux_python.LiveStreamsApi(mux_python.ApiClient(configuration))
 from mux_python.models import CreateLiveStreamRequest
 from .utils.mux import mux_api
 
+from django.http import JsonResponse
+from .utils.livekit_utils import create_token
+
+def get_livekit_token(request, event_id):
+    user = request.user
+    room = f"event_{event_id}"
+    publish = (user.pk == Event.objects.get(pk=event_id).organizer_id)
+    token = create_token(user.username, room, publish)
+    return JsonResponse({"token": token, "url": LIVEKIT_URL, "room": room})
+
 def create_event(request):
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES)
