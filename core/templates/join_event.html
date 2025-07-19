@@ -6,81 +6,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/@mux/mux-embed@latest"></script>
   <script src="https://unpkg.com/@mux/mux-rtmp-publisher"></script>
-  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <style>
-    body {
-      background-color: #000;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-    }
-    .container {
-      max-width: 900px;
-      margin: auto;
-      padding: 1rem;
-    }
-    .video-box {
-      width: 100%;
-      background-color: #111;
-      padding: 1rem;
-      border-radius: 8px;
-      text-align: center;
-      border: 2px solid #333;
-      margin-bottom: 1rem;
-    }
-    #livekit-media video {
-      width: 100%;
-      max-height: 60vh;
-      border-radius: 10px;
-      border: 2px solid limegreen;
-      object-fit: cover;
-    }
-    .chat {
-      background-color: #111;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-top: 1rem;
-    }
-    input, select, button {
-      padding: 0.5rem;
-      border: none;
-      border-radius: 5px;
-      margin: 0.2rem;
-    }
-    input {
-      width: 70%;
-      background-color: #222;
-      color: #fff;
-    }
-    #sendBtn {
-      background-color: limegreen;
-      color: #000;
-      font-weight: bold;
-    }
-    #likeBtn {
-      background-color: #000;
-      color: white;
-      border: 2px solid red;
-      font-weight: bold;
-      transition: background 0.3s, color 0.3s;
-    }
-    #likeBtn.liked {
-      background-color: red;
-      color: #fff;
-    }
-    #leaveChatBtn {
-      background-color: #444;
-      color: #fff;
-      font-weight: bold;
-    }
-    #sendGiftBtn {
-      background-color: orange;
-      color: #000;
-      font-weight: bold;
-    }
-    .viewer-count {
-      margin-bottom: 1rem;
-    }
-  </style>
+<!-- ✅ Load LiveKit before any script uses it -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+
+<style>
+  body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Segoe UI', sans-serif;
+  }
+  .container {
+    max-width: 900px;
+    margin: auto;
+    padding: 1rem;
+  }
+  .video-box {
+    width: 100%;
+    background-color: #111;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    border: 2px solid #333;
+    margin-bottom: 1rem;
+  }
+  #livekit-media video,
+  #localVideo,
+  #viewerStream {
+    width: 100%;
+    max-height: 60vh;
+    border-radius: 10px;
+    border: 2px solid limegreen;
+    object-fit: cover;
+  }
+  .chat {
+    background-color: #111;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+  }
+  input, select, button {
+    padding: 0.5rem;
+    border: none;
+    border-radius: 5px;
+    margin: 0.2rem;
+  }
+  input {
+    width: 70%;
+    background-color: #222;
+    color: #fff;
+  }
+  #sendBtn {
+    background-color: limegreen;
+    color: #000;
+    font-weight: bold;
+  }
+  #likeBtn {
+    background-color: #000;
+    color: white;
+    border: 2px solid red;
+    font-weight: bold;
+    transition: background 0.3s, color 0.3s;
+  }
+  #likeBtn.liked {
+    background-color: red;
+    color: #fff;
+  }
+  #leaveChatBtn {
+    background-color: #444;
+    color: #fff;
+    font-weight: bold;
+  }
+  #sendGiftBtn {
+    background-color: orange;
+    color: #000;
+    font-weight: bold;
+  }
+  .viewer-count {
+    margin-bottom: 1rem;
+  }
+</style>
 </head>
 <body>
 
@@ -94,8 +98,11 @@
   <h1>🎥 {{ event.title }}</h1>
 
   <div class="video-box">
-    <!-- LiveKit video section -->
+    <!-- LiveKit video area -->
     <div id="livekit-media"></div>
+    <!-- Organizer stream preview -->
+    <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
+    <video id="viewerStream" autoplay playsinline style="display: none;"></video>
 
     {% if user.pk == event.organizer.pk %}
       <form method="post" action="{% url 'end_event' event.id %}">
@@ -143,14 +150,14 @@
 </div>
 {% endif %}
 
-<!-- ✅ LiveKit Connection Script -->
+<!-- ✅ LiveKit Connect Script (using lowercase 'livekit' from UMD global) -->
 <script>
 (async () => {
   try {
     const resp = await fetch(`/livekit/token/{{ event.id }}/`);
     const { token, url } = await resp.json();
 
-    const room = new Livekit.Room({
+    const room = new livekit.Room({
       adaptiveStream: true,
       dynacast: true,
     });
@@ -158,7 +165,7 @@
     const mediaDiv = document.getElementById("livekit-media");
     const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
 
-    room.on(Livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    room.on(livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
       const el = track.attach();
       mediaDiv.appendChild(el);
     });
@@ -166,7 +173,7 @@
     await room.connect(url, token);
 
     if (isOrganizer) {
-      const localTracks = await Livekit.createLocalTracks({
+      const localTracks = await livekit.createLocalTracks({
         audio: true,
         video: { resolution: { width: 1280, height: 720 } },
       });
@@ -176,9 +183,17 @@
       localTracks.forEach(track => {
         const el = track.attach();
         mediaDiv.appendChild(el);
+
+        // ✅ show organizer's local video
+        const localPreview = document.getElementById("localVideo");
+        if (localPreview) {
+          localPreview.srcObject = track.mediaStreamTrack ? new MediaStream([track.mediaStreamTrack]) : null;
+          localPreview.style.display = "block";
+        }
       });
     }
 
+    // Handle existing participants
     room.participants.forEach(participant => {
       participant.tracks.forEach(publication => {
         if (publication.track) {
@@ -188,7 +203,8 @@
       });
     });
 
-    room.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
+    // Cleanup when participants leave
+    room.on(livekit.RoomEvent.ParticipantDisconnected, participant => {
       participant.tracks.forEach(pub => {
         const els = pub.track?.detach?.() || [];
         els.forEach(el => el.remove());
@@ -203,6 +219,7 @@
 </script>
 
 </body>
+
 
 
 <script>
