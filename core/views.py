@@ -289,13 +289,12 @@ def join_event(request, event_id):
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
 
-
-
-    return render(request, 'join_event.html', {
+    return render(request, 'index.html', {
         'event': event,
         'participants': participants,
         'participant_count': participant_count,
-        'mux_playback_id': event.mux_playback_id,  # ✅ Ensure this is passed
+        'organizer_id': event.organizer.pk,  # ✅ Added for Agora token generation
+        'mux_playback_id': event.mux_playback_id,  # ✅ Kept for compatibility
     })
 
 
