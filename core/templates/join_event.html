@@ -157,7 +157,7 @@
     const resp = await fetch(`/livekit/token/{{ event.id }}/`);
     const { token, url } = await resp.json();
 
-    const room = new Livekit.Room({
+    const room = new livekit.Room({
       adaptiveStream: true,
       dynacast: true,
     });
@@ -165,7 +165,7 @@
     const mediaDiv = document.getElementById("livekit-media");
     const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
 
-    room.on(Livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    room.on(livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
       const el = track.attach();
       mediaDiv.appendChild(el);
     });
@@ -173,7 +173,7 @@
     await room.connect(url, token);
 
     if (isOrganizer) {
-      const localTracks = await Livekit.createLocalTracks({
+      const localTracks = await livekit.createLocalTracks({
         audio: true,
         video: { resolution: { width: 1280, height: 720 } },
       });
@@ -204,7 +204,7 @@
     });
 
     // Cleanup when participants leave
-    room.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
+    room.on(livekit.RoomEvent.ParticipantDisconnected, participant => {
       participant.tracks.forEach(pub => {
         const els = pub.track?.detach?.() || [];
         els.forEach(el => el.remove());
@@ -217,10 +217,6 @@
   }
 })();
 </script>
-
-</body>
-
-
 
 <script>
 const eventId = "{{ event.id|escapejs }}";
@@ -524,8 +520,6 @@ async function startMuxBroadcast() {
 }
 
 </script>
-
-
 
 </body>
 </html>
