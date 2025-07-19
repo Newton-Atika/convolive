@@ -6,85 +6,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/@mux/mux-embed@latest"></script>
   <script src="https://unpkg.com/@mux/mux-rtmp-publisher"></script>
-<!-- ✅ Load LiveKit before any script uses it -->
-<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+  <!-- ✅ Load LiveKit before any script uses it -->
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 
-<style>
-  body {
-    background-color: #000;
-    color: #fff;
-    font-family: 'Segoe UI', sans-serif;
-  }
-  .container {
-    max-width: 900px;
-    margin: auto;
-    padding: 1rem;
-  }
-  .video-box {
-    width: 100%;
-    background-color: #111;
-    padding: 1rem;
-    border-radius: 8px;
-    text-align: center;
-    border: 2px solid #333;
-    margin-bottom: 1rem;
-  }
-  #livekit-media video,
-  #localVideo,
-  #viewerStream {
-    width: 100%;
-    max-height: 60vh;
-    border-radius: 10px;
-    border: 2px solid limegreen;
-    object-fit: cover;
-  }
-  .chat {
-    background-color: #111;
-    padding: 1rem;
-    border-radius: 8px;
-    margin-top: 1rem;
-  }
-  input, select, button {
-    padding: 0.5rem;
-    border: none;
-    border-radius: 5px;
-    margin: 0.2rem;
-  }
-  input {
-    width: 70%;
-    background-color: #222;
-    color: #fff;
-  }
-  #sendBtn {
-    background-color: limegreen;
-    color: #000;
-    font-weight: bold;
-  }
-  #likeBtn {
-    background-color: #000;
-    color: white;
-    border: 2px solid red;
-    font-weight: bold;
-    transition: background 0.3s, color 0.3s;
-  }
-  #likeBtn.liked {
-    background-color: red;
-    color: #fff;
-  }
-  #leaveChatBtn {
-    background-color: #444;
-    color: #fff;
-    font-weight: bold;
-  }
-  #sendGiftBtn {
-    background-color: orange;
-    color: #000;
-    font-weight: bold;
-  }
-  .viewer-count {
-    margin-bottom: 1rem;
-  }
-</style>
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 1rem;
+    }
+    .video-box {
+      width: 100%;
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 2px solid #333;
+      margin-bottom: 1rem;
+    }
+    #livekit-media video,
+    #localVideo,
+    #viewerStream {
+      width: 100%;
+      max-height: 60vh;
+      border-radius: 10px;
+      border: 2px solid limegreen;
+      object-fit: cover;
+    }
+    .chat {
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+    input, select, button {
+      padding: 0.5rem;
+      border: none;
+      border-radius: 5px;
+      margin: 0.2rem;
+    }
+    input {
+      width: 70%;
+      background-color: #222;
+      color: #fff;
+    }
+    #sendBtn {
+      background-color: limegreen;
+      color: #000;
+      font-weight: bold;
+    }
+    #likeBtn {
+      background-color: #000;
+      color: white;
+      border: 2px solid red;
+      font-weight: bold;
+      transition: background 0.3s, color 0.3s;
+    }
+    #likeBtn.liked {
+      background-color: red;
+      color: #fff;
+    }
+    #leaveChatBtn {
+      background-color: #444;
+      color: #fff;
+      font-weight: bold;
+    }
+    #sendGiftBtn {
+      background-color: orange;
+      color: #000;
+      font-weight: bold;
+    }
+    .viewer-count {
+      margin-bottom: 1rem;
+    }
+  </style>
 </head>
 <body>
 
@@ -153,6 +153,12 @@
 <!-- ✅ LiveKit Connect Script (using lowercase 'livekit' from UMD global) -->
 <script>
 (async () => {
+  if (typeof livekit === 'undefined') {
+    console.error('LiveKit library not loaded');
+    alert('Failed to load LiveKit library. Check your internet connection or script source.');
+    return;
+  }
+
   try {
     const resp = await fetch(`/livekit/token/{{ event.id }}/`);
     const { token, url } = await resp.json();
