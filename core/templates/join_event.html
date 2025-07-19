@@ -131,39 +131,19 @@
 <div class="container">
   <h1>🎥 {{ event.title }}</h1>
 
-<div class="video-box">
-  {% if user.pk == event.organizer.pk %}
-<video id="localVideo" autoplay muted playsinline></video>
+  <div class="video-box">
+    <!-- LiveKit video area -->
+    <div id="livekit-media"></div>
 
-<button onclick="startMuxBroadcast()" style="background:limegreen;color:black;padding:0.5rem 1rem;margin:1rem 0;">🎥 Go Live from Browser</button>
-
-<form method="post" action="{% url 'end_event' event.id %}">
-  {% csrf_token %}
-  <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;">🔴 End Live</button>
-</form>
-
-<p><strong>Or use Stream Key:</strong> {{ event.mux_stream_key }}</p>
-<p>Use OBS or stream from your browser 👆</p>
-
-    <div id="videoPlaceholder">🔴 Waiting for organizer’s live video...</div>
-    {% if event.mux_playback_id %}
-      <video
-        id="viewerStream"
-        autoplay
-        controls
-        playsinline
-        style="width:100%;border-radius:1rem;"
-        src="https://stream.mux.com/{{ event.mux_playback_id }}.m3u8">
-      </video>
-    {% else %}
-      <p>Live stream not yet started.</p>
+    {% if user.pk == event.organizer.pk %}
+      <form method="post" action="{% url 'end_event' event.id %}">
+        {% csrf_token %}
+        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">
+          🔴 End Live
+        </button>
+      </form>
     {% endif %}
-    <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
-    <button id="requestMicBtn" class="mic-request-btn">🎙️ Request to Speak</button>
-  {% endif %}
-</div>
-
-
+  </div>
 
   <div class="viewer-count">
     {% if user.pk == event.organizer.pk and participants %}
@@ -190,7 +170,6 @@
     <input type="text" id="messageInput" placeholder="Type message...">
     <button id="sendBtn">Send</button>
     <button id="leaveChatBtn">Leave Chat</button>
-
     <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
       {% csrf_token %}
       <select name="amount" id="giftType">
@@ -204,6 +183,51 @@
 </div>
 {% endif %}
 
+<!-- LiveKit Client SDK -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<script>
+(async () => {
+  const resp = await fetch(`/livekit/token/{{ event.id }}/`);
+  const { token, url } = await resp.json();
+
+  const roomClient = new Livekit.Room({
+    adaptiveStream: true,
+    dynacast: true,
+  });
+  await roomClient.connect(url, token);
+
+  const mediaDiv = document.getElementById("livekit-media");
+  const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
+
+  if (isOrganizer) {
+    const localTracks = await Livekit.createLocalTracks({
+      audio: true,
+      video: { resolution: { width: 1280, height: 720 } },
+    });
+    await roomClient.localParticipant.publishTracks(localTracks);
+    localTracks.forEach(t => mediaDiv.appendChild(t.attach()));
+  }
+
+  function subscribeParticipant(participant) {
+    participant.tracks.forEach(pub => {
+      if (pub.track) mediaDiv.appendChild(pub.track.attach());
+    });
+    participant.on(Livekit.ParticipantEvent.TrackSubscribed, track => {
+      mediaDiv.appendChild(track.attach());
+    });
+  }
+
+  roomClient.participants.forEach(subscribeParticipant);
+  roomClient.on(Livekit.RoomEvent.ParticipantConnected, subscribeParticipant);
+  roomClient.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
+    participant.tracks.forEach(pub => {
+      const els = pub.track.detach();
+      els.forEach(el => el.remove());
+    });
+  });
+})();
+</script>
+
 <script>
 const eventId = "{{ event.id|escapejs }}";
 const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
@@ -216,12 +240,9 @@ const streamSocket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${e
 
 let liked = false;
 let localMicStream = null;
-let localStream = null;
 const peerConnections = {};
 const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-let streamReady = false;
-const pendingOffers = {};
+let streamReady = false, pendingOffers = {};
 
 function floatEmoji(content) {
   const el = document.createElement("div");
