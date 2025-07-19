@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/@mux/mux-embed@latest"></script>
   <script src="https://unpkg.com/@mux/mux-rtmp-publisher"></script>
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <style>
     body {
       background-color: #000;
@@ -181,8 +182,9 @@
 </div>
 {% endif %}
 
-<!-- LiveKit Client SDK -->
-<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<!-- ✅ LiveKit Client SDK -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.min.js"></script>
+
 <script>
 (async () => {
   const resp = await fetch(`/livekit/token/{{ event.id }}/`);
@@ -203,12 +205,18 @@
       video: { resolution: { width: 1280, height: 720 } },
     });
     await roomClient.localParticipant.publishTracks(localTracks);
-    localTracks.forEach(track => mediaDiv.appendChild(track.attach()));
+    localTracks.forEach(track => {
+      const element = track.attach();
+      mediaDiv.appendChild(element);
+    });
   }
 
   function subscribeParticipant(participant) {
     participant.tracks.forEach(publication => {
-      if (publication.track) mediaDiv.appendChild(publication.track.attach());
+      if (publication.track) {
+        const element = publication.track.attach();
+        mediaDiv.appendChild(element);
+      }
     });
     participant.on(Livekit.ParticipantEvent.TrackSubscribed, track => {
       mediaDiv.appendChild(track.attach());
@@ -219,12 +227,16 @@
   roomClient.on(Livekit.RoomEvent.ParticipantConnected, subscribeParticipant);
   roomClient.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
     participant.tracks.forEach(publication => {
-      const elements = publication.track.detach();
-      elements.forEach(el => el.remove());
+      if (publication.track) {
+        publication.track.detach().forEach(el => el.remove());
+      }
     });
   });
 })();
 </script>
+
+</body>
+
 
 <script>
 const eventId = "{{ event.id|escapejs }}";
