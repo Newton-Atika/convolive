@@ -3,6 +3,7 @@ from django.contrib.auth.views import LogoutView
 from . import views
 urlpatterns = [
     path('', views.landing_page, name='landing'),
+    path('get-agora-token/', views.get_agora_token, name='get_agora_token'),
     path('signup/', views.signup_view, name='signup'),
     path('login/', views.login_view, name='login'),
     path('logout/', LogoutView.as_view(next_page='landing'), name='logout'),
