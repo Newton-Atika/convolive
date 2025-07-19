@@ -182,7 +182,7 @@
       const remoteStream = evt.stream;
       rtc.remoteStream = remoteStream;
       const remoteVideo = document.getElementById('remoteVideo');
-      remoteVideo.srcObject = remoteStream.stream;
+      remoteVideo.srcObject = new MediaStream(remoteStream.getTracks());
       remoteVideo.style.display = 'block';
     });
 
@@ -196,16 +196,13 @@
 
   // Start local stream for organizer
   async function startLocalStream(token, uid) {
-    rtc.localStream = await AgoraRTC.createStream({
-      video: true,
-      audio: true,
-      cameraId: null,
-      microphoneId: null
+    [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
+      microphoneId: null,
+      cameraId: null
     });
-    await rtc.localStream.init();
-    rtc.client.publish(rtc.localStream);
+    await rtc.client.publish(rtc.localStream);
     const localVideo = document.getElementById('localVideo');
-    localVideo.srcObject = rtc.localStream.stream;
+    localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
     localVideo.style.display = 'block';
     await rtc.client.join(token, CHANNEL, uid, (uid) => console.log('User ' + uid + ' joined as host'));
   }
