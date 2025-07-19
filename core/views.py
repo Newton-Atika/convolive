@@ -46,31 +46,44 @@ from livekit import AccessToken, RoomServiceClient
 from django.http import JsonResponse
 from django.conf import settings
 
-def generate_token(request, event_id):
-    user_identity = request.user.username
-    room_name = f"event-{event_id}"
+# views.py
+from django.http import JsonResponse
+from django.conf import settings
+from .models import Event
+from livekit import AccessToken
 
+def create_token(identity, room, can_publish=False):
     at = AccessToken(
         settings.LIVEKIT_API_KEY,
         settings.LIVEKIT_API_SECRET,
-        identity=user_identity,
-        name=request.user.get_full_name() or user_identity
+        identity=identity,
     )
-    at.add_grant(grant={"roomJoin": True, "room": room_name})
 
-    token = at.to_jwt()
-    return JsonResponse({
-        "token": token,
-        "url": settings.LIVEKIT_URL,
-        "room": room_name
+    at.add_grant({
+        "roomJoin": True,
+        "room": room,
+        "canPublish": can_publish,
+        "canSubscribe": True
     })
+
+    return at.to_jwt()
 
 def get_livekit_token(request, event_id):
     user = request.user
     room = f"event_{event_id}"
-    publish = (user.pk == Event.objects.get(pk=event_id).organizer_id)
-    token = create_token(user.username, room, publish)
-    return JsonResponse({"token": token, "url": LIVEKIT_URL, "room": room})
+
+    # Only the organizer is allowed to publish
+    event = Event.objects.get(pk=event_id)
+    can_publish = user.pk == event.organizer_id
+
+    token = create_token(user.username, room, can_publish)
+
+    return JsonResponse({
+        "token": token,
+        "url": settings.LIVEKIT_URL,
+        "room": room
+    })
+
 
 def create_event(request):
     if request.method == 'POST':
