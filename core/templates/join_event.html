@@ -13,17 +13,33 @@
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js';
         script.defer = true;
-        script.onload = () => resolve();
+        script.onload = () => {
+          console.log('LiveKit loaded from primary CDN');
+          resolve();
+        };
         script.onerror = () => {
-          console.error('Primary CDN failed, trying fallback');
+          console.error('Primary CDN failed, trying fallback CDN');
           const fallbackScript = document.createElement('script');
-          fallbackScript.src = 'https://unpkg.com/livekit-client@latest/dist/livekit-client.umd.min.js'; // Secondary CDN
+          fallbackScript.src = 'https://unpkg.com/livekit-client@latest/dist/livekit-client.umd.min.js';
           fallbackScript.defer = true;
-          fallbackScript.onload = () => resolve();
+          fallbackScript.onload = () => {
+            console.log('LiveKit loaded from fallback CDN');
+            resolve();
+          };
           fallbackScript.onerror = () => {
-            console.error('All CDNs failed');
-            alert('Failed to load LiveKit library. Check your internet connection or contact support.');
-            reject();
+            console.error('Fallback CDN failed, trying local fallback');
+            const localScript = document.createElement('script');
+            localScript.src = '/static/js/livekit-client.umd.min.js'; // Adjust path if hosting locally
+            localScript.defer = true;
+            localScript.onload = () => {
+              console.log('LiveKit loaded from local file');
+              resolve();
+            };
+            localScript.onerror = () => {
+              console.error('All loading attempts failed');
+              reject(new Error('Failed to load LiveKit library'));
+            };
+            document.head.appendChild(localScript);
           };
           document.head.appendChild(fallbackScript);
         };
@@ -32,7 +48,7 @@
     }
 
     // Load LiveKit before inline scripts
-    loadLiveKitScript().catch(() => {});
+    loadLiveKitScript().catch(err => console.error(err.message));
   </script>
 
   <style>
@@ -191,9 +207,9 @@
       clearInterval(checkLiveKit);
       if (typeof livekit === 'undefined') {
         console.error('LiveKit library not loaded after timeout');
-        alert('Failed to load LiveKit library. Check your internet connection or contact support.');
+        alert('Failed to load LiveKit library after 10 seconds. Check your internet connection, disable ad blockers, or contact support.');
       }
-    }, 5000); // 5-second timeout
+    }, 10000); // 10-second timeout
   });
 
   try {
@@ -421,7 +437,7 @@ streamSocket.onmessage = async e => {
     handleViewerIce(data.viewer_id, data.candidate);
 
   } else if (data.type === "organizer_ice" && !isOrganizer) {
-    handleOrganizerIce(data.candidate);
+    handleOrganizerIce(candidate);
 
   } else if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
     console.log("🚀 Viewer received live_started signal");
