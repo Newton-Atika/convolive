@@ -55,7 +55,6 @@ import time
 import os
 from django.conf import settings
 from django.http import JsonResponse
-from agora_token_service import RtcTokenBuilder
 import time
 import os
 
@@ -71,8 +70,8 @@ from .models import Event, LiveStatus, LiveParticipant, Payment
 import os
 
 # Hardcoded or environment variables for security
-AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
-AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
+AGORA_APP_ID = '5a7551a1892a47258b7e9f7f264e6196'
+AGORA_APP_CERTIFICATE = '27b20c8f267e4235b207d6aef1bf7dea'
 
 def generate_agora_token(channel, uid, role):
     """Generate an Agora AccessToken2 manually."""
