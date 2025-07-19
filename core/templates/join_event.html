@@ -132,15 +132,13 @@
   <h1>🎥 {{ event.title }}</h1>
 
   <div class="video-box">
-    <!-- LiveKit video area -->
+    <!-- LiveKit video section -->
     <div id="livekit-media"></div>
 
     {% if user.pk == event.organizer.pk %}
       <form method="post" action="{% url 'end_event' event.id %}">
         {% csrf_token %}
-        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">
-          🔴 End Live
-        </button>
+        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
       </form>
     {% endif %}
   </div>
@@ -205,12 +203,12 @@
       video: { resolution: { width: 1280, height: 720 } },
     });
     await roomClient.localParticipant.publishTracks(localTracks);
-    localTracks.forEach(t => mediaDiv.appendChild(t.attach()));
+    localTracks.forEach(track => mediaDiv.appendChild(track.attach()));
   }
 
   function subscribeParticipant(participant) {
-    participant.tracks.forEach(pub => {
-      if (pub.track) mediaDiv.appendChild(pub.track.attach());
+    participant.tracks.forEach(publication => {
+      if (publication.track) mediaDiv.appendChild(publication.track.attach());
     });
     participant.on(Livekit.ParticipantEvent.TrackSubscribed, track => {
       mediaDiv.appendChild(track.attach());
@@ -220,9 +218,9 @@
   roomClient.participants.forEach(subscribeParticipant);
   roomClient.on(Livekit.RoomEvent.ParticipantConnected, subscribeParticipant);
   roomClient.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
-    participant.tracks.forEach(pub => {
-      const els = pub.track.detach();
-      els.forEach(el => el.remove());
+    participant.tracks.forEach(publication => {
+      const elements = publication.track.detach();
+      elements.forEach(el => el.remove());
     });
   });
 })();
