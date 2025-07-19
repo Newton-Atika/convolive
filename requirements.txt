@@ -101,3 +101,4 @@ whitenoise==6.7.0
 mux_python==5.0.1
 livekit-api==1.0.3
 PyJWT==2.10.1
+agora_token_service==1.33.0
