@@ -79,7 +79,8 @@ def generate_agora_token(channel, uid, role):
         expiration = int(time.time()) + 3600
         role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
         token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
-        logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
+        logger.debug(f"Full generated token: {token}")
+        print(f"DEBUG: Full token: {token}")  # Force stdout
         if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
             logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
             raise ValueError("Invalid token format")
