@@ -164,20 +164,20 @@
   }
 
   // Initialize Agora client and fetch token
-  async function initAgora() {
-    rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-    const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-    if (!resp.ok) throw new Error('Failed to fetch Agora token');
-    const { token } = await resp.json();
-    const uid = getRandomUid();
+async function initAgora() {
+  rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+  const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+  if (!resp.ok) throw new Error('Failed to fetch Agora token');
+  const { token } = await resp.json();
+  const uid = getRandomUid();
 
-    if (isOrganizer) {
-      rtc.client.setClientRole('host');
-      await startLocalStream(token, uid);
-    } else {
-      rtc.client.setClientRole('audience');
-      await joinChannel(token, uid);
-    }
+  if (isOrganizer) {
+    rtc.client.setClientRole('host');
+    await startLocalStream(token, uid);
+  } else {
+    rtc.client.setClientRole('audience');
+    await joinChannel(token, uid);
+  }
 
     rtc.client.on('stream-added', (evt) => {
       const stream = evt.stream;
