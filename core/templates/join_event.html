@@ -6,8 +6,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/@mux/mux-embed@latest"></script>
   <script src="https://unpkg.com/@mux/mux-rtmp-publisher"></script>
-  <!-- ✅ Load LiveKit before any script uses it -->
-  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+  <!-- Dynamic LiveKit script loading -->
+  <script>
+    function loadLiveKitScript() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js';
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => {
+          console.error('Primary CDN failed, trying fallback');
+          const fallbackScript = document.createElement('script');
+          fallbackScript.src = 'https://unpkg.com/livekit-client@latest/dist/livekit-client.umd.min.js'; // Secondary CDN
+          fallbackScript.defer = true;
+          fallbackScript.onload = () => resolve();
+          fallbackScript.onerror = () => {
+            console.error('All CDNs failed');
+            alert('Failed to load LiveKit library. Check your internet connection or contact support.');
+            reject();
+          };
+          document.head.appendChild(fallbackScript);
+        };
+        document.head.appendChild(script);
+      });
+    }
+
+    // Load LiveKit before inline scripts
+    loadLiveKitScript().catch(() => {});
+  </script>
 
   <style>
     body {
@@ -153,11 +179,22 @@
 <!-- ✅ LiveKit Connect Script (using lowercase 'livekit' from UMD global) -->
 <script>
 (async () => {
-  if (typeof livekit === 'undefined') {
-    console.error('LiveKit library not loaded');
-    alert('Failed to load LiveKit library. Check your internet connection or script source.');
-    return;
-  }
+  // Wait for LiveKit to load
+  await new Promise(resolve => {
+    const checkLiveKit = setInterval(() => {
+      if (typeof livekit !== 'undefined') {
+        clearInterval(checkLiveKit);
+        resolve();
+      }
+    }, 100);
+    setTimeout(() => {
+      clearInterval(checkLiveKit);
+      if (typeof livekit === 'undefined') {
+        console.error('LiveKit library not loaded after timeout');
+        alert('Failed to load LiveKit library. Check your internet connection or contact support.');
+      }
+    }, 5000); // 5-second timeout
+  });
 
   try {
     const resp = await fetch(`/livekit/token/{{ event.id }}/`);
@@ -524,7 +561,6 @@ async function startMuxBroadcast() {
     alert("Could not start broadcast: " + err.message);
   }
 }
-
 </script>
 
 </body>
