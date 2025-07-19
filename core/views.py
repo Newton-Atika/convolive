@@ -69,69 +69,55 @@ from django.http import JsonResponse
 import time
 import os
 import logging
-from agora_token_builder import RtcTokenBuilder  # pip install agora-token-service
-
-from .models import Event, LiveStatus, Payment, LiveParticipant  # adjust your import path
+from agora_token_builder import RtcTokenBuilder
 
 # Configure logging
-logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-# Use environment variables
+# Hardcoded or environment variables for security
 AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
 AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
 
 def generate_agora_token(channel, uid, role):
-    """Generate Agora token based on user role."""
+    """Generate an Agora AccessToken2 using the official SDK."""
     try:
+        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
+        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
         expiration = int(time.time()) + 3600
-        role_type = 1 if role == 'publisher' else 2  # 1=Publisher, 2=Subscriber
-        token = RtcTokenBuilder.buildTokenWithUid(
-            AGORA_APP_ID,
-            AGORA_APP_CERTIFICATE,
-            channel,
-            uid,
-            role_type,
-            expiration
-        )
+        role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
+        token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
+        logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
         if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
+            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
             raise ValueError("Invalid token format")
         return token
     except Exception as e:
-        logger.error(f"Agora token generation failed: {e}")
+        logger.error(f"Token generation failed: {str(e)}")
         raise
 
 @login_required
 def get_agora_token(request):
-    """Returns a token for a given channel."""
+    """Endpoint to get Agora token."""
     try:
         channel = request.GET.get('channel')
         organizer_id = request.GET.get('organizer_id')
-
+        logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
         if not channel or not organizer_id:
             return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-
-        uid = request.user.id
+        uid = 0
         role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
-
         token = generate_agora_token(channel, uid, role)
-        return JsonResponse({
-            'token': token,
-            'uid': uid,
-            'appID': AGORA_APP_ID,
-            'role': role
-        })
-
+        return JsonResponse({'token': token})
     except Exception as e:
-        logger.error(f"Error generating Agora token: {e}")
+        logger.error(f"Token endpoint error: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @login_required
 def join_event(request, event_id):
-    """Join the event and render appropriate template."""
     event = get_object_or_404(Event, id=event_id)
 
-    # Check if event has ended
+    # ✅ Check if the live has ended
     try:
         status = LiveStatus.objects.get(event=event)
         if not status.is_active:
@@ -139,20 +125,19 @@ def join_event(request, event_id):
     except LiveStatus.DoesNotExist:
         pass
 
-    # Ensure viewer has paid for non-organizer
-    if request.user != event.organizer:
-        if not event.is_live:
-            has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
-            if not has_paid:
-                return redirect('pay_event', event_id=event.id)
+    # ✅ If the event is not live, ensure payment is made
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            return redirect('pay_event', event_id=event.id)
 
-    # Add viewer/organizer to participants
+    # ✅ Add the user as a live participant
     LiveParticipant.objects.get_or_create(event=event, user=request.user)
 
-    # Count participants
+    # ✅ Get participant count
     participant_count = LiveParticipant.objects.filter(event=event).count()
 
-    # List participants if user is organizer
+    # ✅ If organizer, list all participants
     participants = []
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
@@ -162,8 +147,7 @@ def join_event(request, event_id):
         'participants': participants,
         'participant_count': participant_count,
         'organizer_id': event.organizer.pk,
-        'agora_channel': f"event_{event.id}",
-        'mux_playback_id': event.mux_playback_id,  # optional if using Agora only
+        'mux_playback_id': event.mux_playback_id,
     })
 
 def create_token(identity, room, can_publish=False):
