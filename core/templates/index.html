@@ -158,12 +158,18 @@
     remoteStream: null
   };
 
+  // Generate a random UID between 0 and 10000
+  function getRandomUid() {
+    return Math.floor(Math.random() * 10001); // 0 to 10000 inclusive
+  }
+
   // Initialize Agora client and fetch token
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
     if (!resp.ok) throw new Error('Failed to fetch Agora token');
-    const { token, uid } = await resp.json();
+    const { token } = await resp.json();
+    const uid = getRandomUid();
 
     if (isOrganizer) {
       rtc.client.setClientRole('host');
@@ -281,7 +287,8 @@
       console.log("🚀 Viewer received live_started signal");
       const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
       if (!resp.ok) throw new Error('Failed to fetch Agora token');
-      const { token, uid } = await resp.json();
+      const { token } = await resp.json();
+      const uid = getRandomUid();
       await joinChannel(token, uid);
     }
   };
