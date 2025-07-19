@@ -37,7 +37,7 @@
             };
             localScript.onerror = () => {
               console.error('All loading attempts failed');
-              reject(new Error('Failed to load LiveKit library'));
+              reject(new Error('Failed to load LiveKit library after all attempts'));
             };
             document.head.appendChild(localScript);
           };
@@ -48,7 +48,10 @@
     }
 
     // Load LiveKit before inline scripts
-    loadLiveKitScript().catch(err => console.error(err.message));
+    loadLiveKitScript().catch(err => {
+      console.error(err.message);
+      alert(`Failed to load LiveKit library at 09:36 AM SAST, July 19, 2025. This may be due to network issues. Please download the library from https://github.com/livekit/client-sdk-js/releases/latest and host it at /static/js/livekit-client.umd.min.js, then refresh the page.`);
+    });
   </script>
 
   <style>
@@ -206,8 +209,8 @@
     setTimeout(() => {
       clearInterval(checkLiveKit);
       if (typeof livekit === 'undefined') {
-        console.error('LiveKit library not loaded after timeout');
-        alert('Failed to load LiveKit library after 10 seconds. Check your internet connection, disable ad blockers, or contact support.');
+        console.error('LiveKit library not loaded after 10-second timeout');
+        alert('Failed to load LiveKit library. Check console logs for details or follow the instructions in the previous alert.');
       }
     }, 10000); // 10-second timeout
   });
@@ -430,14 +433,14 @@ streamSocket.onmessage = async e => {
     await handleViewerOffer(data.viewer_id, data.offer);
 
   } else if (data.type === "organizer_answer" && !isOrganizer) {
-    console.log("📲 Viewer received organizer_answer");
+    console.log("📲 Viewer received organizer's answer");
     await handleOrganizerAnswer(data.answer);
 
   } else if (data.type === "viewer_ice" && isOrganizer) {
     handleViewerIce(data.viewer_id, data.candidate);
 
   } else if (data.type === "organizer_ice" && !isOrganizer) {
-    handleOrganizerIce(candidate);
+    handleOrganizerIce(data.candidate);
 
   } else if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
     console.log("🚀 Viewer received live_started signal");
