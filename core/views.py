@@ -59,29 +59,29 @@ from agora_token_service import RtcTokenBuilder
 import time
 import os
 
-AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
-AGORA_APP_CERTIFICATE = "27b20c8f267e4235b207d6aef1bf7dea"
+from django.http import JsonResponse
+from agora_token_builder import RtcTokenBuilder
+import time
+import random
 
-def generate_agora_token(request):
-    channel_name = request.GET.get("channel")
-    uid = request.GET.get("uid", "0")  # 0 for default
-    role = request.GET.get("role", "publisher")  # 'publisher' or 'subscriber'
-
-    if role == "publisher":
-        role_enum = 1
-    else:
-        role_enum = 2
-
-    expiration_time_in_seconds = 3600
+def get_agora_token(request):
+    app_id = "5a7551a1892a47258b7e9f7f264e6196"
+    app_certificate = "27b20c8f267e4235b207d6aef1bf7dea"
+    channel = request.GET.get('channel')
+    uid = str(random.randint(1, 10000))  # Unique user ID
+    role = "publisher" if request.user.is_authenticated and request.user.pk == request.GET.get('organizer_id') else "subscriber"
+    expiration_time_in_seconds = 3600  # 1 hour
     current_timestamp = int(time.time())
     privilege_expired_ts = current_timestamp + expiration_time_in_seconds
 
     token = RtcTokenBuilder.buildTokenWithUid(
-        AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel_name, int(uid), role_enum, privilege_expired_ts
+        app_id,
+        app_certificate,
+        uid,
+        role,
+        privilege_expired_ts
     )
-
-    return JsonResponse({"token": token, "appId": AGORA_APP_ID})
-
+    return JsonResponse({'token': token, 'uid': uid})
 
 def create_token(identity, room, can_publish=False):
     now = int(time.time())
