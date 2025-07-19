@@ -150,7 +150,7 @@
     const resp = await fetch(`/livekit/token/{{ event.id }}/`);
     const { token, url } = await resp.json();
 
-    const room = new livekit.Room({
+    const room = new Livekit.Room({
       adaptiveStream: true,
       dynacast: true,
     });
@@ -158,7 +158,7 @@
     const mediaDiv = document.getElementById("livekit-media");
     const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
 
-    room.on(livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    room.on(Livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
       const el = track.attach();
       mediaDiv.appendChild(el);
     });
@@ -166,7 +166,7 @@
     await room.connect(url, token);
 
     if (isOrganizer) {
-      const localTracks = await livekit.createLocalTracks({
+      const localTracks = await Livekit.createLocalTracks({
         audio: true,
         video: { resolution: { width: 1280, height: 720 } },
       });
@@ -188,7 +188,7 @@
       });
     });
 
-    room.on(livekit.RoomEvent.ParticipantDisconnected, participant => {
+    room.on(Livekit.RoomEvent.ParticipantDisconnected, participant => {
       participant.tracks.forEach(pub => {
         const els = pub.track?.detach?.() || [];
         els.forEach(el => el.remove());
