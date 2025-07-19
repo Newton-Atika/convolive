@@ -41,6 +41,29 @@ from .utils.mux import mux_api
 
 from django.http import JsonResponse
 from .utils.livekit_utils import create_token
+# views.py
+from livekit import AccessToken, RoomServiceClient
+from django.http import JsonResponse
+from django.conf import settings
+
+def generate_token(request, event_id):
+    user_identity = request.user.username
+    room_name = f"event-{event_id}"
+
+    at = AccessToken(
+        settings.LIVEKIT_API_KEY,
+        settings.LIVEKIT_API_SECRET,
+        identity=user_identity,
+        name=request.user.get_full_name() or user_identity
+    )
+    at.add_grant(grant={"roomJoin": True, "room": room_name})
+
+    token = at.to_jwt()
+    return JsonResponse({
+        "token": token,
+        "url": settings.LIVEKIT_URL,
+        "room": room_name
+    })
 
 def get_livekit_token(request, event_id):
     user = request.user
