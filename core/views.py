@@ -63,51 +63,15 @@ logger = logging.getLogger(__name__)
 AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
 AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
 
+from agora_token_builder import RtcTokenBuilder
 def generate_agora_token(channel, uid, role):
-    """Generate an Agora AccessToken2 manually."""
-    try:
-        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
-        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
-
-        # Expiration time (1 hour from now)
-        expiration_in_seconds = 3600
-        current_timestamp = int(time.time())
-        expire_timestamp = current_timestamp + expiration_in_seconds
-        logger.debug(f"Timestamps: current={current_timestamp}, expire={expire_timestamp}")
-
-        # Privilege flags
-        privileges = {
-            'g': 1 if role == 'publisher' else 0,
-            'publish': {'audio': 1 if role == 'publisher' else 0, 'video': 1 if role == 'publisher' else 0}
-        }
-        logger.debug(f"Privileges: {privileges}")
-
-        # Content to sign
-        content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
-        signature = hmac.new(
-            AGORA_APP_CERTIFICATE.encode('utf-8'),
-            content.encode('utf-8'),
-            hashlib.sha256
-        ).digest()
-        logger.debug(f"Signature length: {len(signature)}")
-
-        # Encode components
-        signature_base64 = base64.urlsafe_b64encode(signature).decode('utf-8').rstrip('=')
-        version_base64 = base64.urlsafe_b64encode(b'1').decode('utf-8').rstrip('=')
-        expire_base64 = base64.urlsafe_b64encode(str(expire_timestamp).encode('utf-8')).decode('utf-8').rstrip('=')
-        content_base64 = base64.urlsafe_b64encode(content.encode('utf-8')).decode('utf-8').rstrip('=')
-        logger.debug(f"Base64 lengths: sig={len(signature_base64)}, ver={len(version_base64)}, exp={len(expire_base64)}, cont={len(content_base64)}")
-
-        # Construct token
-        token = f"006{AGORA_APP_ID}{signature_base64}{version_base64}{expire_base64}{content_base64}"
-        logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
-        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
-            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
-            raise ValueError("Invalid token format")
-        return token
-    except Exception as e:
-        logger.error(f"Token generation failed: {str(e)}")
-        raise
+    app_id = AGORA_APP_ID
+    app_certificate = AGORA_APP_CERTIFICATE
+    expiration = int(time.time()) + 3600
+    role = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
+    token = RtcTokenBuilder.buildTokenWithUid(app_id, app_certificate, channel, uid, role, expiration)
+    logger.debug(f"Generated token: {token[:50]}... (length: {len(token)})")
+    return token
 
 @login_required
 def get_agora_token(request):
