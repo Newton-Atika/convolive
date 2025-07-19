@@ -59,29 +59,101 @@ from agora_token_service import RtcTokenBuilder
 import time
 import os
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from agora_token_builder import RtcTokenBuilder
+import hmac
+import hashlib
 import time
-import random
+import base64
+import json
+from .models import Event, LiveStatus, LiveParticipant, Payment
+import os
 
-def get_agora_token(request):
-    app_id = "5a7551a1892a47258b7e9f7f264e6196"
-    app_certificate = "27b20c8f267e4235b207d6aef1bf7dea"
-    channel = request.GET.get('channel')
-    uid = str(random.randint(1, 10000))  # Unique user ID
-    role = "publisher" if request.user.is_authenticated and request.user.pk == request.GET.get('organizer_id') else "subscriber"
-    expiration_time_in_seconds = 3600  # 1 hour
+# Hardcoded or environment variables for security
+AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
+AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
+
+def generate_agora_token(channel, uid, role):
+    """Generate an Agora AccessToken2 manually."""
+    # Expiration time (1 hour from now)
+    expiration_in_seconds = 3600
     current_timestamp = int(time.time())
-    privilege_expired_ts = current_timestamp + expiration_time_in_seconds
+    expire_timestamp = current_timestamp + expiration_in_seconds
 
-    token = RtcTokenBuilder.buildTokenWithUid(
-        app_id,
-        app_certificate,
-        uid,
-        role,
-        privilege_expired_ts
+    # Privilege flags (adjust based on role)
+    privileges = {
+        'g': 1 if role == 'publisher' else 0,  # Join channel
+        'publish': {
+            'audio': 1 if role == 'publisher' else 0,
+            'video': 1 if role == 'publisher' else 0,
+        }
+    }
+
+    # Token version and signature
+    version = 1
+    content = f"{channel}\0{uid}\0{expire_timestamp}\0{json.dumps(privileges)}"
+    signature = hmac.new(
+        AGORA_APP_CERTIFICATE.encode('utf-8'),
+        content.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+
+    # Pack token
+    token = (
+        base64.urlsafe_b64encode(signature).rstrip(b'=').decode('utf-8') + ':' +
+        base64.urlsafe_b64encode(str(version).encode('utf-8')).rstrip(b'=').decode('utf-8') + ':' +
+        base64.urlsafe_b64encode(str(expire_timestamp).encode('utf-8')).rstrip(b'=').decode('utf-8') + ':' +
+        base64.urlsafe_b64encode(content.encode('utf-8')).rstrip(b'=').decode('utf-8')
     )
+    return f"006{AGORA_APP_ID}{token}"
+
+@login_required
+def get_agora_token(request):
+    """Endpoint to get Agora token."""
+    channel = request.GET.get('channel')
+    organizer_id = request.GET.get('organizer_id')
+    uid = str(int(time.time() * 1000))  # Unique ID based on timestamp
+    role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
+    token = generate_agora_token(channel, uid, role)
     return JsonResponse({'token': token, 'uid': uid})
+
+@login_required
+def join_event(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
+
+    # ✅ Check if the live has ended
+    try:
+        status = LiveStatus.objects.get(event=event)
+        if not status.is_active:
+            return render(request, 'live_has_ended.html', {'event': event})
+    except LiveStatus.DoesNotExist:
+        pass
+
+    # ✅ If the event is not live (i.e., a conversation), ensure payment is made
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            return redirect('pay_event', event_id=event.id)
+
+    # ✅ Add the user as a live participant (or do nothing if already added)
+    LiveParticipant.objects.get_or_create(event=event, user=request.user)
+
+    # ✅ Get participant count
+    participant_count = LiveParticipant.objects.filter(event=event).count()
+
+    # ✅ If organizer, list all participants
+    participants = []
+    if request.user == event.organizer:
+        participants = LiveParticipant.objects.filter(event=event).select_related('user')
+
+    return render(request, 'index.html', {
+        'event': event,
+        'participants': participants,
+        'participant_count': participant_count,
+        'organizer_id': event.organizer.pk,  # ✅ Added for Agora token generation
+        'mux_playback_id': event.mux_playback_id,  # ✅ Kept for compatibility
+    })
 
 def create_token(identity, room, can_publish=False):
     now = int(time.time())
@@ -254,51 +326,6 @@ def verify_gift_payment(request):
         if event_id:
             event = Event.objects.filter(id=event_id).first()
         return render(request, "payment_error.html", {"error": str(e), "event": event})
-
-
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, get_object_or_404, redirect
-from .models import Event, LiveStatus, LiveParticipant, Payment
-
-@login_required
-def join_event(request, event_id):
-    event = get_object_or_404(Event, id=event_id)
-
-    # ✅ Check if the live has ended
-    try:
-        status = LiveStatus.objects.get(event=event)
-        if not status.is_active:
-            return render(request, 'live_has_ended.html', {'event': event})
-    except LiveStatus.DoesNotExist:
-        pass
-
-    # ✅ If the event is not live (i.e., a conversation), ensure payment is made
-    if not event.is_live:
-        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
-        if not has_paid:
-            return redirect('pay_event', event_id=event.id)
-
-    # ✅ Add the user as a live participant (or do nothing if already added)
-    LiveParticipant.objects.get_or_create(event=event, user=request.user)
-
-    # ✅ Get participant count
-    participant_count = LiveParticipant.objects.filter(event=event).count()
-
-    # ✅ If organizer, list all participants
-    participants = []
-    if request.user == event.organizer:
-        participants = LiveParticipant.objects.filter(event=event).select_related('user')
-
-    return render(request, 'index.html', {
-        'event': event,
-        'participants': participants,
-        'participant_count': participant_count,
-        'organizer_id': event.organizer.pk,  # ✅ Added for Agora token generation
-        'mux_playback_id': event.mux_playback_id,  # ✅ Kept for compatibility
-    })
-
-
-
 # views.py
 
 import uuid
