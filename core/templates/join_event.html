@@ -148,27 +148,9 @@
 
 <script>
   // Agora configuration
-  const AGORA_APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
-  const AGORA_APP_CERTIFICATE = '27b20c8f267e4235b207d6aef1bf7dea';
   const CHANNEL = '{{ event.id|escapejs }}';
   const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
-
-  // Simple token generation (for testing only, move to server in production)
-  function generateToken(appId, appCertificate, channel, uid, role) {
-    const AgoraAccessToken = require('agora-access-token');
-    const expirationTimeInSeconds = 3600; // 1 hour
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
-
-    const token = AgoraAccessToken.RtcTokenBuilder.buildTokenWithUid(
-      appId,
-      appCertificate,
-      uid,
-      role,
-      privilegeExpiredTs
-    );
-    return token;
-  }
+  const organizerId = "{{ event.organizer.pk|default:'0' }}";
 
   let rtc = {
     client: null,
@@ -176,20 +158,21 @@
     remoteStream: null
   };
 
-  // Initialize Agora client
+  // Initialize Agora client and fetch token
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-    await rtc.client.init(AGORA_APP_ID, () => console.log('Agora RTC client initialized'), (err) => console.error(err));
+    await rtc.client.init('5a7551a1892a47258b7e9f7f264e6196', () => console.log('Agora RTC client initialized'), (err) => console.error(err));
 
-    const uid = Math.floor(Math.random() * 10000); // Unique user ID
-    const token = generateToken(AGORA_APP_ID, AGORA_APP_CERTIFICATE, CHANNEL, uid, isOrganizer ? 'publisher' : 'subscriber');
+    const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+    if (!resp.ok) throw new Error('Failed to fetch Agora token');
+    const { token, uid } = await resp.json();
 
     if (isOrganizer) {
       rtc.client.setClientRole('host');
-      startLocalStream(token, uid);
+      await startLocalStream(token, uid);
     } else {
       rtc.client.setClientRole('audience');
-      joinChannel(token, uid);
+      await joinChannel(token, uid);
     }
 
     rtc.client.on('stream-added', (evt) => {
@@ -230,8 +213,8 @@
   }
 
   // Join channel for viewers
-  function joinChannel(token, uid) {
-    rtc.client.join(token, CHANNEL, uid, (uid) => {
+  async function joinChannel(token, uid) {
+    await rtc.client.join(token, CHANNEL, uid, (uid) => {
       console.log('User ' + uid + ' joined channel ' + CHANNEL + ' as audience');
     }, (err) => console.error('Join channel failed', err));
   }
@@ -247,7 +230,10 @@
 
   // Initialize on load
   window.onload = () => {
-    initAgora();
+    initAgora().catch(err => {
+      console.error('Agora initialization error:', err);
+      alert('Failed to initialize Agora. Check console for details.');
+    });
   };
 
   // WebSocket and other logic
@@ -296,9 +282,10 @@
     const data = JSON.parse(e.data);
     if (data.type === "live_started" && !isOrganizer) {
       console.log("🚀 Viewer received live_started signal");
-      const uid = Math.floor(Math.random() * 10000);
-      const token = generateToken(AGORA_APP_ID, AGORA_APP_CERTIFICATE, CHANNEL, uid, 'subscriber');
-      joinChannel(token, uid);
+      const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+      if (!resp.ok) throw new Error('Failed to fetch Agora token');
+      const { token, uid } = await resp.json();
+      await joinChannel(token, uid);
     }
   };
 
