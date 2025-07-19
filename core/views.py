@@ -55,6 +55,7 @@ from .models import Event, LiveStatus, LiveParticipant, Payment
 import os
 import logging
 
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -62,27 +63,32 @@ import time
 import os
 import logging
 from agora_token_builder import RtcTokenBuilder
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Hardcoded or environment variables for security
-AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
-AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
+# Load Agora credentials from environment variables
+AGORA_APP_ID = '5a7551a1892a47258b7e9f7f264e6196'
+AGORA_APP_CERTIFICATE = '27b20c8f267e4235b207d6aef1bf7dea'
 
 def generate_agora_token(channel, uid, role):
     """Generate an Agora AccessToken2 using the official SDK."""
     try:
         logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
         logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
-        expiration = int(time.time()) + 3600
+        if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
+            raise ValueError("AGORA_APP_ID or AGORA_APP_CERTIFICATE not set")
+        expiration = int(time.time()) + 3600  # Token valid for 1 hour
         role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
-        token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
-        logger.debug(f"Full generated token: {token}")
-        print(f"DEBUG: Full token: {token}")  # Force stdout
+        token = RtcTokenBuilder.buildTokenWithUid(
+            AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration
+        )
+        logger.debug(f"Generated token: {token}")
+        logger.debug(f"Token length: {len(token)}, ASCII: {all(ord(c) < 128 for c in token)}")
         if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
-            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
+            logger.error("Invalid token format")
             raise ValueError("Invalid token format")
         if not token.startswith("006" + AGORA_APP_ID):
             logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
@@ -94,17 +100,17 @@ def generate_agora_token(channel, uid, role):
 
 @login_required
 def get_agora_token(request):
-    """Endpoint to get Agora token."""
+    """Endpoint to get Agora token and UID."""
     try:
-        channel = request.GET.get('channel')
+        channel = str(request.GET.get('channel'))  # Ensure channel is a string
         organizer_id = request.GET.get('organizer_id')
         logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
         if not channel or not organizer_id:
             return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-        uid = 0
+        uid = random.randint(0, 10000)  # Generate random UID
         role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
         token = generate_agora_token(channel, uid, role)
-        return JsonResponse({'token': token})
+        return JsonResponse({'token': token, 'uid': uid})
     except Exception as e:
         logger.error(f"Token endpoint error: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
@@ -113,7 +119,7 @@ def get_agora_token(request):
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
 
-    # ✅ Check if the live has ended
+    # Check if the live has ended
     try:
         status = LiveStatus.objects.get(event=event)
         if not status.is_active:
@@ -121,19 +127,19 @@ def join_event(request, event_id):
     except LiveStatus.DoesNotExist:
         pass
 
-    # ✅ If the event is not live, ensure payment is made
+    # If the event is not live, ensure payment is made
     if not event.is_live:
         has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
         if not has_paid:
             return redirect('pay_event', event_id=event.id)
 
-    # ✅ Add the user as a live participant
+    # Add the user as a live participant
     LiveParticipant.objects.get_or_create(event=event, user=request.user)
 
-    # ✅ Get participant count
+    # Get participant count
     participant_count = LiveParticipant.objects.filter(event=event).count()
 
-    # ✅ If organizer, list all participants
+    # If organizer, list all participants
     participants = []
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
