@@ -20,6 +20,7 @@
     #sendGiftBtn { background-color: orange; color: #000; font-weight: bold; }
     .viewer-count { margin-bottom: 1rem; }
     #member-list { margin-top: 1rem; }
+    .error-message { color: red; margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -63,6 +64,7 @@
       </select>
       <button type="submit" id="sendGiftBtn">Send Gift</button>
     </form>
+    <div id="error-message" class="error-message"></div>
   </div>
 </div>
 {% endif %}
@@ -92,15 +94,19 @@
         await joinChannel(token, data.uid);
       }
       rtc.client.on('stream-added', (evt) => {
-        console.log('Stream added:', evt.stream.getId());
-        rtc.client.subscribe(evt.stream);
+        console.log('Stream added:', evt.stream.getId(), 'from UID:', evt.stream.getId());
+        rtc.client.subscribe(evt.stream, { audio: true, video: true });
       });
       rtc.client.on('stream-subscribed', (evt) => {
         console.log('Stream subscribed:', evt.stream.getId());
         rtc.remoteStream = evt.stream;
         const remoteVideo = document.getElementById('remoteVideo');
-        remoteVideo.srcObject = new MediaStream(evt.stream.getTracks());
-        remoteVideo.style.display = 'block';
+        if (remoteVideo) {
+          remoteVideo.srcObject = new MediaStream(evt.stream.getTracks());
+          remoteVideo.style.display = 'block';
+        } else {
+          console.error('Remote video element not found');
+        }
       });
       rtc.client.on('peer-leave', () => {
         console.log('Peer left');
@@ -112,7 +118,7 @@
       updateMemberList();
     } catch (err) {
       console.error('Agora error:', err);
-      alert('Agora failed. Check console or contact support.');
+      document.getElementById('error-message').textContent = 'Agora initialization failed: ' + err.message;
     }
   }
 
@@ -122,20 +128,25 @@
       [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({ microphoneId: true, cameraId: true });
       if (!rtc.localStream || !rtc.localStream.getTracks().some(track => track.kind === 'video')) {
         console.error('No video track available, check camera permissions');
-        alert('Please allow camera access to stream.');
+        document.getElementById('error-message').textContent = 'Please allow camera access to stream.';
         return;
       }
-      console.log('Local stream tracks:', rtc.localStream.getTracks());
+      console.log('Local stream tracks:', rtc.localStream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled })));
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 });
       console.log('Joined channel as host, publishing stream');
       await rtc.client.publish(rtc.localStream);
       const localVideo = document.getElementById('localVideo');
-      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
-      localVideo.style.display = 'block';
+      if (localVideo) {
+        localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
+        localVideo.style.display = 'block';
+      } else {
+        console.error('Local video element not found');
+      }
       console.log('Stream started for UID:', uid);
       createMember(uid);
     } catch (err) {
       console.error('Stream error:', err);
+      document.getElementById('error-message').textContent = 'Stream error: ' + err.message;
     }
   }
 
@@ -146,6 +157,7 @@
       createMember(uid);
     } catch (err) {
       console.error('Join error:', err);
+      document.getElementById('error-message').textContent = 'Join error: ' + err.message;
     }
   }
 
@@ -242,3 +254,5 @@
   document.getElementById("leaveChatBtn").onclick = () => { leaveChannel(); window.location.href = "{% url 'landing' %}"; };
   const micBtn = document.getElementById("requestMicBtn"); if (micBtn) micBtn.onclick = () => { chatSocket.send(JSON.stringify({ type: "mic_request", username: user })); micBtn.disabled = true; };
 </script>
+</body>
+</html>
