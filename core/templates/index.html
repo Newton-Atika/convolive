@@ -38,8 +38,6 @@
 <script>
   const CHANNEL = '{{ event.id|escapejs }}';
   const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
-  const APP_ID = '5a7551a1892a47258b7e9f7f264e6196'; // Replace with your App ID
-  const APP_CERTIFICATE = '27b20c8f267e4235b207d6aef1bf7dea'; // Replace with your App Certificate
   let rtc = { client: null, localStream: null, remoteStream: null };
 
   function logDebug(message) {
@@ -69,28 +67,18 @@
     }
   }
 
-  async function generateToken(channel, uid) {
-    const expirationTimeInSeconds = 3600; // 1 hour
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
-    return AgoraRTC.RtcTokenBuilder.buildTokenWithUid(
-      APP_ID,
-      APP_CERTIFICATE,
-      channel,
-      uid,
-      1, // Publisher role
-      privilegeExpiredTs
-    );
-  }
-
   async function startStream() {
     if (!await checkDevices()) return;
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = Math.floor(Math.random() * 10000) + 1;
     try {
-      const token = await generateToken(CHANNEL, uid);
-      logDebug(`Generated token: ${token}, UID: ${uid}`);
-      await rtc.client.join(APP_ID, CHANNEL, token, uid);
+      const response = await fetch(`/getToken?channel=${CHANNEL}&organizer_id={{ organizer_id|default:'0' }}`);
+      if (!response.ok) throw new Error(`Token fetch failed: ${response.status} ${response.statusText}`);
+      const data = await response.json();
+      const token = data.token;
+      if (!token) throw new Error('No token received: ' + JSON.stringify(data));
+      logDebug(`Received token: ${token}, UID: ${data.uid || uid}`);
+      await rtc.client.join(token, CHANNEL, uid);
       logDebug('Joined channel as host');
 
       await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
