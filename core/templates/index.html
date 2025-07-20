@@ -21,7 +21,7 @@
     .viewer-count { margin-bottom: 1rem; }
     #member-list { margin-top: 1rem; }
     .error-message { color: red; margin-top: 1rem; }
-    .debug-info { color: #ccc; font-size: 0.9em; margin-top: 1rem; }
+    .debug-info { color: #ccc; font-size: 0.9em; margin-top: 1rem; max-height: 200px; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -80,10 +80,27 @@
 
   function logDebug(message) {
     console.log(message);
-    document.getElementById('debug-info').textContent += message + '\n';
+    const debugInfo = document.getElementById('debug-info');
+    if (debugInfo) debugInfo.textContent += new Date().toISOString() + ': ' + message + '\n';
+  }
+
+  async function checkDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      logDebug(`Available video devices: ${videoDevices.length} - ${videoDevices.map(d => d.label).join(', ')}`);
+      if (videoDevices.length === 0) {
+        logDebug('No video devices found, check hardware or permissions');
+        document.getElementById('error-message').textContent = 'No camera detected. Check hardware or permissions.';
+      }
+    } catch (err) {
+      logDebug('Device check error: ' + err.message);
+      document.getElementById('error-message').textContent = 'Device check failed: ' + err.message;
+    }
   }
 
   async function initAgora() {
+    await checkDevices();
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = getRandomUid();
     try {
@@ -132,6 +149,7 @@
   async function startLocalStream(token, uid) {
     try {
       logDebug(`Initializing local stream for UID: ${uid}`);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({ microphoneId: true, cameraId: true });
       if (!rtc.localStream || !rtc.localStream.getTracks().some(track => track.kind === 'video' && track.enabled)) {
         logDebug('No video track available or disabled, check camera permissions');
@@ -141,7 +159,20 @@
       logDebug('Local stream tracks: ' + JSON.stringify(rtc.localStream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled }))));
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 });
       logDebug('Joined channel as host');
-      await rtc.client.publish(rtc.localStream).then(() => logDebug('Stream published successfully')).catch(err => logDebug('Publish error: ' + err));
+      let publishAttempts = 0;
+      const maxAttempts = 3;
+      while (publishAttempts < maxAttempts) {
+        try {
+          await rtc.client.publish(rtc.localStream);
+          logDebug('Stream published successfully');
+          break;
+        } catch (err) {
+          publishAttempts++;
+          logDebug(`Publish attempt ${publishAttempts} failed: ${err.message}`);
+          if (publishAttempts === maxAttempts) throw err;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        }
+      }
       const localVideo = document.getElementById('localVideo');
       if (localVideo) {
         localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
