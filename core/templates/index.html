@@ -174,12 +174,11 @@
         throw new Error(`Failed to fetch Agora token: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
-      console.log('Raw response:', data); // Log full response
       const token = data.token;
       if (!token || typeof token !== 'string' || token.length === 0) {
-        throw new Error('Invalid Agora token received: ' + JSON.stringify(token));
+        throw new Error('Invalid Agora token received: ' + JSON.stringify(data));
       }
-      console.log('Received token:', token); // Log the token
+      console.log('Received token:', token);
 
       if (isOrganizer) {
         rtc.client.setClientRole('host');
@@ -210,7 +209,7 @@
       });
     } catch (err) {
       console.error('Agora initialization error:', err);
-      alert('Failed to initialize Agora. Check console for details.');
+      alert('Failed to initialize Agora. Check console for details or contact support.');
     }
   }
 
@@ -221,11 +220,12 @@
         microphoneId: null,
         cameraId: null
       });
-      await rtc.client.join(token, CHANNEL, uid);
+      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }); // Optional: Specify token expiry
       await rtc.client.publish(rtc.localStream);
       const localVideo = document.getElementById('localVideo');
       localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
       localVideo.style.display = 'block';
+      console.log('Local stream started successfully');
     } catch (err) {
       console.error('Start local stream error:', err);
     }
@@ -234,7 +234,7 @@
   // Join channel for viewers
   async function joinChannel(token, uid) {
     try {
-      await rtc.client.join(token, CHANNEL, uid, (uid) => {
+      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, (uid) => {
         console.log('Viewer joined channel', CHANNEL, 'with UID', uid);
       }, (err) => console.error('Join channel failed:', err));
     } catch (err) {
@@ -255,7 +255,7 @@
   window.onload = () => {
     initAgora().catch(err => {
       console.error('Agora initialization error:', err);
-      alert('Failed to initialize Agora. Check console for details.');
+      alert('Failed to initialize Agora. Check console for details or contact support.');
     });
   };
 
@@ -283,7 +283,7 @@
     switch (value) {
       case "10": return "🌹 Coin x10";
       case "20": return "🍫 Coin x20";
-      case "50": return "⭐ Coin x50";
+      case "50": return "⭐ Star x50";
       default: return `🎁 Coin x${value}`;
     }
   }
