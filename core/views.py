@@ -81,7 +81,6 @@ AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
 AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
 
 def generate_agora_token(channel, uid, role):
-    """Generate an Agora AccessToken2 using the official SDK."""
     try:
         logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
         logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
@@ -89,10 +88,7 @@ def generate_agora_token(channel, uid, role):
         role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
         token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
         logger.debug(f"Full generated token: {token}")
-        print(f"DEBUG: Full token: {token}")  # Force stdout
-        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
-            logger.error(f"Invalid token generated: length={len(token)}, ASCII={all(ord(c) < 128 for c in token)}")
-            raise ValueError("Invalid token format")
+        print(f"DEBUG: Full token: {token}")
         if not token.startswith("006" + AGORA_APP_ID):
             logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
             raise ValueError("Token prefix invalid")
