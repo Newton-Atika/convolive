@@ -148,6 +148,8 @@
 
 <script>
   // Agora configuration
+<script>
+  // Agora configuration
   const CHANNEL = '{{ event.id|escapejs }}';
   const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
   const organizerId = "{{ organizer_id|default:'0' }}";
@@ -158,19 +160,28 @@
     remoteStream: null
   };
 
-  // Generate a random UID between 0 and 10000
+  // Generate a random UID between 1 and 10000
   function getRandomUid() {
-    return Math.floor(Math.random() * 10001); // 0 to 10000 inclusive
+    return Math.floor(Math.random() * 10000) + 1;
   }
 
   // Initialize Agora client and fetch token
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-    // Temporary hardcoded token from Agora Console (replace with your generated "006" token)
-    const token = "0065a7551a1892a47258b7e9f7f264e6196IABnCKl/m8IBHJfAnqHyEV3KrgU0+6FdvuAHRwgeI6Rny7fv3IMAAAAAIgADcGoDrCV9aAQAAQA84ntoAgA84ntoAwA84ntoBAA84nto"; // Replace with correct token
     const uid = getRandomUid();
 
     try {
+      const response = await fetch(`/get_agora_token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch Agora token');
+      }
+      const data = await response.json();
+      const token = data.token;
+
+      if (!token || typeof token !== 'string' || token.length === 0) {
+        throw new Error('Invalid Agora token received');
+      }
+
       if (isOrganizer) {
         rtc.client.setClientRole('host');
         await startLocalStream(token, uid);
@@ -210,10 +221,8 @@
       microphoneId: null,
       cameraId: null
     });
-    await rtc.client.join(token, CHANNEL, uid, (uid) => {
-      console.log('User ' + uid + ' joined as host');
-      rtc.client.publish(rtc.localStream);
-    });
+    await rtc.client.join(token, CHANNEL, uid);
+    rtc.client.publish(rtc.localStream);
     const localVideo = document.getElementById('localVideo');
     localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
     localVideo.style.display = 'block';
@@ -221,9 +230,8 @@
 
   // Join channel for viewers
   async function joinChannel(token, uid) {
-    await rtc.client.join(token, CHANNEL, uid, (uid) => {
-      console.log('User ' + uid + ' joined channel ' + CHANNEL + ' as audience');
-    }, (err) => console.error('Join channel failed', err));
+    await rtc.client.join(token, CHANNEL, uid);
+    console.log('Viewer joined channel', CHANNEL);
   }
 
   // Leave channel
@@ -242,6 +250,8 @@
       alert('Failed to initialize Agora. Check console for details.');
     });
   };
+</script>
+
 
   // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
