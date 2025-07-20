@@ -77,8 +77,10 @@
       const data = await response.json();
       const token = data.token;
       if (!token) throw new Error('No token received: ' + JSON.stringify(data));
-      logDebug(`Received token: ${token}, UID: ${data.uid || uid}`);
-      await rtc.client.join(token, CHANNEL, uid);
+      logDebug(`Received token: ${token}, UID: ${data.uid || uid}, Length: ${token.length}`);
+      logDebug(`Token characters: ${token.split('').map(c => c.charCodeAt(0)).join(', ')}`); // Debug character codes
+
+      await rtc.client.join(token, CHANNEL, uid); // Test with token as App ID temporarily
       logDebug('Joined channel as host');
 
       await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
@@ -110,8 +112,8 @@
       document.getElementById('startStreamBtn').style.display = 'none';
       document.getElementById('stopStreamBtn').style.display = 'block';
     } catch (err) {
-      logDebug('Stream error: ' + err.message);
-      showError('Stream error: ' + err.message);
+      logDebug('Stream error: ' + (err.name ? `${err.name}: ${err.message}` : err.message));
+      showError('Stream error: ' + (err.name ? `${err.name}: ${err.message}` : err.message));
     }
 
     rtc.client.on('stream-added', evt => {
