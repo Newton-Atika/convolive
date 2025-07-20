@@ -62,17 +62,14 @@ from django.http import JsonResponse
 import time
 import os
 import logging
-from agora_token_builder import RtcTokenBuilder
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from agora_token_builder import RtcTokenBuilder
 import time
 import logging
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
-# Replace with your actual App ID and Certificate from Agora Console
 AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
 AGORA_APP_CERTIFICATE = "27b20c8f267e4235b207d6aef1bf7dea"
 
@@ -80,52 +77,49 @@ AGORA_APP_CERTIFICATE = "27b20c8f267e4235b207d6aef1bf7dea"
 def get_agora_token(request):
     try:
         channel = request.GET.get('channel')
-        organizer_id = request.GET.get('organizer_id', '0')  # Default to 0 if not provided
+        organizer_id = request.GET.get('organizer_id', '0')
 
         if not channel:
             return JsonResponse({'error': 'Channel is required'}, status=400)
 
-        # Use organizer_id as UID for the host
         uid = int(organizer_id) if organizer_id else 0
-        expiration_in_seconds = 3600  # 1 hour expiration
-        role = 1  # 1 = Publisher (host), 2 = Subscriber (audience)
+        current_time = int(time.time())
+        expiration = current_time + 3600  # 1 hour expiration
 
-        # Generate token with the latest RtcTokenBuilder
-        current_timestamp = int(time.time())
-        expire_timestamp = current_timestamp + expiration_in_seconds
+        # Generate token with RtcTokenBuilder from agora-token-builder
         token = RtcTokenBuilder.buildTokenWithUid(
             AGORA_APP_ID,
             AGORA_APP_CERTIFICATE,
             channel,
             uid,
-            role,
-            expire_timestamp
+            1,  # Role: 1 = Publisher, 2 = Subscriber
+            expiration
         )
 
-        logger.debug(f"Generated Agora token for channel {channel}, uid {uid}: {token}")
+        logger.debug(f"Generated token for channel {channel}, uid {uid}: {token}")
         return JsonResponse({'token': token})
 
     except Exception as e:
-        logger.error(f"Error generating Agora token: {str(e)}")
-        return JsonResponse({'error': 'Failed to generate token'}, status=500)
+        logger.error(f"Token generation error: {str(e)}")
+        return JsonResponse({'error': 'Token generation failed'}, status=500)
 
 # Other views (e.g., join_event, end_event) remain unchanged unless modified
+from agora_token_builder import RtcTokenBuilder
 @login_required
-def get_agora_token(request):
-    """Endpoint to get Agora token."""
+def generate_agora_token(channel, uid, role):
     try:
-        channel = request.GET.get('channel')
-        organizer_id = request.GET.get('organizer_id')
-        logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
-        if not channel or not organizer_id:
-            return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-        uid = 0
-        role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
-        token = generate_agora_token(channel, uid, role)
-        return JsonResponse({'token': token})
+        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
+        expiration = int(time.time()) + 3600
+        role_type = 1 if role == 'publisher' else 2
+        token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
+        logger.debug(f"Full generated token: {token}")
+        if not token.startswith("006" + AGORA_APP_ID):
+            logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
+            raise ValueError("Token prefix invalid")
+        return token
     except Exception as e:
-        logger.error(f"Token endpoint error: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.error(f"Token generation failed: {str(e)}")
+        raise
 
 @login_required
 def join_event(request, event_id):
