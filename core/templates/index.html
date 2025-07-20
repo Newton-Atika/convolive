@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>{{ event.title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.8.0.js"></script> <!-- Downgraded to match new code -->
   <style>
     body { background-color: #000; color: #fff; font-family: 'Segoe UI', sans-serif; }
     .container { max-width: 900px; margin: auto; padding: 1rem; }
@@ -19,6 +19,7 @@
     #leaveChatBtn { background-color: #444; color: #fff; font-weight: bold; }
     #sendGiftBtn { background-color: orange; color: #000; font-weight: bold; }
     .viewer-count { margin-bottom: 1rem; }
+    #member-list { margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -41,7 +42,7 @@
   <div class="viewer-count">
     {% if user.pk == event.organizer.pk and participants %}
       👁️ Viewers: {{ participants|length }}
-      <div><strong>Joined Participants:</strong><ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul></div>
+      <div><strong>Joined Participants:</strong><ul id="member-list">{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul></div>
     {% else %}👁️ Viewers: {{ participant_count }}{% endif %}
   </div>
   {% if user.pk == event.organizer.pk %}
@@ -77,18 +78,18 @@
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = getRandomUid();
     try {
-      const response = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+      const response = await fetch(`/getToken?channel=${CHANNEL}&organizer_id=${organizerId}`);
       if (!response.ok) throw new Error(`Token fetch failed: ${response.status} ${response.statusText}`);
       const data = await response.json();
       const token = data.token;
       if (!token) throw new Error('No token received: ' + JSON.stringify(data));
-      console.log('Received token:', token);
+      console.log('Received token:', token, 'UID:', data.uid);
       if (isOrganizer) {
         rtc.client.setClientRole('host');
-        await startLocalStream(token, uid);
+        await startLocalStream(token, data.uid);
       } else {
         rtc.client.setClientRole('audience');
-        await joinChannel(token, uid);
+        await joinChannel(token, data.uid);
       }
       rtc.client.on('stream-added', (evt) => rtc.client.subscribe(evt.stream));
       rtc.client.on('stream-subscribed', (evt) => {
@@ -102,6 +103,8 @@
           document.getElementById('remoteVideo').style.display = 'none';
         }
       });
+      // Update member list
+      updateMemberList();
     } catch (err) {
       console.error('Agora error:', err);
       alert('Agora failed. Check console or contact support.');
@@ -116,12 +119,14 @@
       document.getElementById('localVideo').srcObject = new MediaStream(rtc.localStream.getTracks());
       document.getElementById('localVideo').style.display = 'block';
       console.log('Stream started');
+      createMember(uid); // Register member on join
     } catch (err) { console.error('Stream error:', err); }
   }
 
   async function joinChannel(token, uid) {
     try {
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, () => console.log('Joined as viewer', uid), (err) => console.error('Join failed:', err));
+      createMember(uid); // Register member on join
     } catch (err) { console.error('Join error:', err); }
   }
 
@@ -129,12 +134,40 @@
     if (rtc.localStream) rtc.localStream.close();
     if (rtc.remoteStream) rtc.remoteStream.close();
     rtc.client.leave(() => console.log('Left channel'), (err) => console.error('Leave error:', err));
+    deleteMember(); // Remove member on leave
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
 
-  window.onload = () => initAgora().catch(console.error);
+  function createMember(uid) {
+    fetch('/createMember', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: "{{ request.user.username|escapejs }}", UID: uid, room_name: CHANNEL })
+    }).catch(err => console.error('Member creation error:', err));
+  }
 
+  function deleteMember() {
+    fetch('/deleteMember', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: "{{ request.user.username|escapejs }}", UID: getRandomUid(), room_name: CHANNEL })
+    }).catch(err => console.error('Member deletion error:', err));
+  }
+
+  function updateMemberList() {
+    fetch(`/getMember?UID=${getRandomUid()}&room_name=${CHANNEL}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.name) {
+          const list = document.getElementById('member-list');
+          list.innerHTML = `<li>🟢 ${data.name}</li>`; // Simplify for now
+        }
+      })
+      .catch(err => console.error('Member list update error:', err));
+  }
+
+  // Existing WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
   const user = "{{ request.user.username|escapejs }}";
   const eventId = "{{ event.id|escapejs }}";
@@ -142,7 +175,8 @@
   const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
   const streamSocket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${eventId}/`);
 
-  let liked = false, localMicStream = null;
+  let liked = false;
+  let localMicStream = null;
 
   function floatEmoji(content) {
     const el = document.createElement("div"); el.className = "float-emoji"; el.innerText = content;
@@ -154,7 +188,7 @@
   }
 
   streamSocket.onopen = () => (isOrganizer ? streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId })) : streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user })));
-  streamSocket.onmessage = async (e) => { if (JSON.parse(e.data).type === "live_started" && !isOrganizer) { const { token } = await (await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`)).json(); await joinChannel(token, getRandomUid()); } };
+  streamSocket.onmessage = async (e) => { if (JSON.parse(e.data).type === "live_started" && !isOrganizer) { const { token, uid } = await (await fetch(`/getToken?channel=${CHANNEL}&organizer_id=${organizerId}`)).json(); await joinChannel(token, uid); } };
 
   chatSocket.onmessage = (e) => {
     const data = JSON.parse(e.data);
