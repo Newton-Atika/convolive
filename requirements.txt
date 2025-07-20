@@ -102,4 +102,4 @@ mux_python==5.0.1
 livekit-api==1.0.3
 PyJWT==2.10.1
 agora_token_builder==1.0.0
-agora-token-service==1.6.0
+agora-token-service==1.5.0
