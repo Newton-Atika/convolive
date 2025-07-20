@@ -1,12 +1,9 @@
 from django.urls import path
 from django.contrib.auth.views import LogoutView
 from . import views
-
-app_name = 'events'  # Namespace for this app
-
 urlpatterns = [
     path('', views.landing_page, name='landing'),
-    path('get-agora-token/', views.get_agora_token, name='get_agora_token'),  # Standardized to hyphen
+    path('get-agora-token/', views.get_agora_token, name='get_agora_token'),
     path('signup/', views.signup_view, name='signup'),
     path('login/', views.login_view, name='login'),
     path('logout/', LogoutView.as_view(next_page='landing'), name='logout'),
@@ -21,7 +18,10 @@ urlpatterns = [
     path('events/<int:event_id>/gift/', views.initiate_gift_payment, name='gift_payment'),
     path('verify-gift-payment/', views.verify_gift_payment, name='verify_gift_payment'),
     path('event/<int:event_id>/', views.event_detail, name='event_detail'),
-    path('stream/<int:event_id>/', views.stream_view, name='stream'),  # Using event_id for consistency
+    path('stream/<int:event_id>/', views.stream_view, name='stream'),
     path('toggle-like/', views.toggle_like, name='toggle_like'),
     path('livekit/token/<int:event_id>/', views.get_livekit_token, name='get_livekit_token'),
+    path('stream/<str:room_name>/', views.stream_view, name='stream'),
+    path('get_agora_token/', views.get_agora_token, name='get_agora_token'),
+    path('events/<int:event_id>/join/', views.join_event, name='join_event'),
 ]
