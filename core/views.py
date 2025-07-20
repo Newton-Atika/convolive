@@ -60,11 +60,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 import time
-import os
-import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
-from agora_token_builder import RtcTokenBuilder
+from agora_token_builder import RtcTokenBuilder, RtcTokenBuilderRole
 import time
 import logging
 
@@ -86,13 +84,13 @@ def get_agora_token(request):
         current_time = int(time.time())
         expiration = current_time + 3600  # 1 hour expiration
 
-        # Generate token with RtcTokenBuilder from agora-token-builder
+        # Use RtcTokenBuilder with explicit role and privileges for v4.x compatibility
         token = RtcTokenBuilder.buildTokenWithUid(
             AGORA_APP_ID,
             AGORA_APP_CERTIFICATE,
             channel,
             uid,
-            1,  # Role: 1 = Publisher, 2 = Subscriber
+            RtcTokenBuilderRole.PUBLISHER,  # Explicit Publisher role
             expiration
         )
 
