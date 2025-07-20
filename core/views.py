@@ -63,40 +63,53 @@ import time
 import os
 import logging
 from agora_token_builder import RtcTokenBuilder
-import random
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-import time
-import os
-import logging
+from django.views.decorators.http import require_GET
 from agora_token_builder import RtcTokenBuilder
+import time
+import logging
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Hardcoded or environment variables for security
-AGORA_APP_ID = os.getenv('AGORA_APP_ID', '5a7551a1892a47258b7e9f7f264e6196')
-AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '27b20c8f267e4235b207d6aef1bf7dea')
+# Replace with your actual App ID and Certificate from Agora Console
+AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
+AGORA_APP_CERTIFICATE = "27b20c8f267e4235b207d6aef1bf7dea"
 
-def generate_agora_token(channel, uid, role):
+@require_GET
+def get_agora_token(request):
     try:
-        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
-        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
-        expiration = int(time.time()) + 3600
-        role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
-        token = RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration)
-        logger.debug(f"Full generated token: {token}")
-        print(f"DEBUG: Full token: {token}")
-        if not token.startswith("006" + AGORA_APP_ID):
-            logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
-            raise ValueError("Token prefix invalid")
-        return token
-    except Exception as e:
-        logger.error(f"Token generation failed: {str(e)}")
-        raise
+        channel = request.GET.get('channel')
+        organizer_id = request.GET.get('organizer_id', '0')  # Default to 0 if not provided
 
+        if not channel:
+            return JsonResponse({'error': 'Channel is required'}, status=400)
+
+        # Use organizer_id as UID for the host
+        uid = int(organizer_id) if organizer_id else 0
+        expiration_in_seconds = 3600  # 1 hour expiration
+        role = 1  # 1 = Publisher (host), 2 = Subscriber (audience)
+
+        # Generate token with the latest RtcTokenBuilder
+        current_timestamp = int(time.time())
+        expire_timestamp = current_timestamp + expiration_in_seconds
+        token = RtcTokenBuilder.buildTokenWithUid(
+            AGORA_APP_ID,
+            AGORA_APP_CERTIFICATE,
+            channel,
+            uid,
+            role,
+            expire_timestamp
+        )
+
+        logger.debug(f"Generated Agora token for channel {channel}, uid {uid}: {token}")
+        return JsonResponse({'token': token})
+
+    except Exception as e:
+        logger.error(f"Error generating Agora token: {str(e)}")
+        return JsonResponse({'error': 'Failed to generate token'}, status=500)
+
+# Other views (e.g., join_event, end_event) remain unchanged unless modified
 @login_required
 def get_agora_token(request):
     """Endpoint to get Agora token."""
