@@ -60,7 +60,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 import random
 import time
-from agora_token_builder import RtcTokenBuilder, RtcTokenBuilderRole
+from agora_token_builder import RtcTokenBuilder
 from .models import LiveParticipant, Event  # Adjust model names as needed
 import json
 from django.views.decorators.http import require_GET, require_POST
@@ -111,7 +111,7 @@ def getToken(request):
         AGORA_APP_CERTIFICATE,
         channel,
         uid,
-        RtcTokenBuilderRole.PUBLISHER,
+        1,
         expiration
     )
 
