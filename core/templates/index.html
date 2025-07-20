@@ -171,15 +171,15 @@
     try {
       const response = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch Agora token: ${response.statusText}`);
+        throw new Error(`Failed to fetch Agora token: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
+      console.log('Raw response:', data); // Log full response
       const token = data.token;
-
       if (!token || typeof token !== 'string' || token.length === 0) {
-        throw new Error('Invalid Agora token received');
+        throw new Error('Invalid Agora token received: ' + JSON.stringify(token));
       }
-      console.log('Received token:', token); // Debug log
+      console.log('Received token:', token); // Log the token
 
       if (isOrganizer) {
         rtc.client.setClientRole('host');
@@ -270,9 +270,6 @@
 
   let liked = false;
   let localMicStream = null;
-  const peerConnections = {};
-  const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-  let streamReady = false, pendingOffers = {};
 
   function floatEmoji(content) {
     const el = document.createElement("div");
