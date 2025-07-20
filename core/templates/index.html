@@ -169,9 +169,9 @@
     const uid = getRandomUid();
 
     try {
-      const response = await fetch(`/get_agora_token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+      const response = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch Agora token');
+        throw new Error(`Failed to fetch Agora token: ${response.statusText}`);
       }
       const data = await response.json();
       const token = data.token;
@@ -179,6 +179,7 @@
       if (!token || typeof token !== 'string' || token.length === 0) {
         throw new Error('Invalid Agora token received');
       }
+      console.log('Received token:', token); // Debug log
 
       if (isOrganizer) {
         rtc.client.setClientRole('host');
@@ -190,7 +191,7 @@
 
       rtc.client.on('stream-added', (evt) => {
         const stream = evt.stream;
-        rtc.client.subscribe(stream, (err) => console.log('Subscribe failed', err));
+        rtc.client.subscribe(stream, (err) => console.log('Subscribe failed:', err));
       });
 
       rtc.client.on('stream-subscribed', (evt) => {
@@ -215,28 +216,37 @@
 
   // Start local stream for organizer
   async function startLocalStream(token, uid) {
-    [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
-      microphoneId: null,
-      cameraId: null
-    });
-    await rtc.client.join(token, CHANNEL, uid);
-    rtc.client.publish(rtc.localStream);
-    const localVideo = document.getElementById('localVideo');
-    localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
-    localVideo.style.display = 'block';
+    try {
+      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
+        microphoneId: null,
+        cameraId: null
+      });
+      await rtc.client.join(token, CHANNEL, uid);
+      await rtc.client.publish(rtc.localStream);
+      const localVideo = document.getElementById('localVideo');
+      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
+      localVideo.style.display = 'block';
+    } catch (err) {
+      console.error('Start local stream error:', err);
+    }
   }
 
   // Join channel for viewers
   async function joinChannel(token, uid) {
-    await rtc.client.join(token, CHANNEL, uid);
-    console.log('Viewer joined channel', CHANNEL);
+    try {
+      await rtc.client.join(token, CHANNEL, uid, (uid) => {
+        console.log('Viewer joined channel', CHANNEL, 'with UID', uid);
+      }, (err) => console.error('Join channel failed:', err));
+    } catch (err) {
+      console.error('Join channel error:', err);
+    }
   }
 
   // Leave channel
   function leaveChannel() {
     if (rtc.localStream) rtc.localStream.close();
     if (rtc.remoteStream) rtc.remoteStream.close();
-    rtc.client.leave(() => console.log('Channel left'), (err) => console.error(err));
+    rtc.client.leave(() => console.log('Channel left'), (err) => console.error('Leave error:', err));
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
@@ -248,8 +258,6 @@
       alert('Failed to initialize Agora. Check console for details.');
     });
   };
-</script>
-
 
   // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
@@ -297,7 +305,7 @@
     if (data.type === "live_started" && !isOrganizer) {
       console.log("🚀 Viewer received live_started signal");
       const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-      if (!resp.ok) throw new Error('Failed to fetch Agora token');
+      if (!resp.ok) throw new Error(`Failed to fetch Agora token: ${resp.statusText}`);
       const { token } = await resp.json();
       const uid = getRandomUid();
       await joinChannel(token, uid);
@@ -330,7 +338,7 @@
             video.style.display = "block";
             floatEmoji("🎤🎥 You are live!");
           })
-          .catch(() => alert("Could not access camera/microphone."));
+          .catch(err => alert(`Could not access camera/microphone: ${err.message}`));
       } else {
         document.getElementById(`mic-${data.username}`)?.remove();
       }
