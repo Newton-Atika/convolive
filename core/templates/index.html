@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>{{ event.title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.8.0.js"></script> <!-- Downgraded to match new code -->
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.8.0.js"></script>
   <style>
     body { background-color: #000; color: #fff; font-family: 'Segoe UI', sans-serif; }
     .container { max-width: 900px; margin: auto; padding: 1rem; }
@@ -91,19 +91,24 @@
         rtc.client.setClientRole('audience');
         await joinChannel(token, data.uid);
       }
-      rtc.client.on('stream-added', (evt) => rtc.client.subscribe(evt.stream));
+      rtc.client.on('stream-added', (evt) => {
+        console.log('Stream added:', evt.stream.getId());
+        rtc.client.subscribe(evt.stream);
+      });
       rtc.client.on('stream-subscribed', (evt) => {
+        console.log('Stream subscribed:', evt.stream.getId());
         rtc.remoteStream = evt.stream;
-        document.getElementById('remoteVideo').srcObject = new MediaStream(evt.stream.getTracks());
-        document.getElementById('remoteVideo').style.display = 'block';
+        const remoteVideo = document.getElementById('remoteVideo');
+        remoteVideo.srcObject = new MediaStream(evt.stream.getTracks());
+        remoteVideo.style.display = 'block';
       });
       rtc.client.on('peer-leave', () => {
+        console.log('Peer left');
         if (rtc.remoteStream) {
           rtc.remoteStream.close();
           document.getElementById('remoteVideo').style.display = 'none';
         }
       });
-      // Update member list
       updateMemberList();
     } catch (err) {
       console.error('Agora error:', err);
@@ -113,28 +118,37 @@
 
   async function startLocalStream(token, uid) {
     try {
-      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks();
+      console.log('Initializing local stream for UID:', uid);
+      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({ microphoneId: true, cameraId: true });
+      console.log('Local stream tracks:', rtc.localStream.getTracks());
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 });
+      console.log('Joined channel as host, publishing stream');
       await rtc.client.publish(rtc.localStream);
-      document.getElementById('localVideo').srcObject = new MediaStream(rtc.localStream.getTracks());
-      document.getElementById('localVideo').style.display = 'block';
-      console.log('Stream started');
-      createMember(uid); // Register member on join
-    } catch (err) { console.error('Stream error:', err); }
+      const localVideo = document.getElementById('localVideo');
+      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
+      localVideo.style.display = 'block';
+      console.log('Stream started for UID:', uid);
+      createMember(uid);
+    } catch (err) {
+      console.error('Stream error:', err);
+    }
   }
 
   async function joinChannel(token, uid) {
     try {
+      console.log('Joining channel as audience with UID:', uid);
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, () => console.log('Joined as viewer', uid), (err) => console.error('Join failed:', err));
-      createMember(uid); // Register member on join
-    } catch (err) { console.error('Join error:', err); }
+      createMember(uid);
+    } catch (err) {
+      console.error('Join error:', err);
+    }
   }
 
   function leaveChannel() {
     if (rtc.localStream) rtc.localStream.close();
     if (rtc.remoteStream) rtc.remoteStream.close();
     rtc.client.leave(() => console.log('Left channel'), (err) => console.error('Leave error:', err));
-    deleteMember(); // Remove member on leave
+    deleteMember();
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
@@ -167,7 +181,6 @@
       .catch(err => console.error('Member list update error:', err));
   }
 
-  // Existing WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
   const user = "{{ request.user.username|escapejs }}";
   const eventId = "{{ event.id|escapejs }}";
@@ -184,7 +197,7 @@
   }
 
   function giftLabel(value) {
-    return { '10': '🌹 Coin x10', '20': '🍫 Coin x20', '50': '⭐ Star x50' }[value] || `🎁 Coin x${value}`;
+    return { '10': '🌹 Coin x10', '20': '🍫 Chocolate (20 KES)', '50': '⭐ Star (50 KES)' }[value] || `🎁 Coin x${value}`;
   }
 
   streamSocket.onopen = () => (isOrganizer ? streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId })) : streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user })));
