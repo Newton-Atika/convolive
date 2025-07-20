@@ -62,7 +62,7 @@ from django.http import JsonResponse
 import time
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
-from agora_token_builder import RtcTokenBuilder, RtcTokenBuilderRole
+from agora_token_builder import RtcTokenBuilder
 import time
 import logging
 
@@ -90,7 +90,7 @@ def get_agora_token(request):
             AGORA_APP_CERTIFICATE,
             channel,
             uid,
-            RtcTokenBuilderRole.PUBLISHER,  # Explicit Publisher role
+            # Explicit Publisher role
             expiration
         )
 
