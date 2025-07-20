@@ -21,6 +21,7 @@
     .viewer-count { margin-bottom: 1rem; }
     #member-list { margin-top: 1rem; }
     .error-message { color: red; margin-top: 1rem; }
+    .debug-info { color: #ccc; font-size: 0.9em; margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -65,6 +66,7 @@
       <button type="submit" id="sendGiftBtn">Send Gift</button>
     </form>
     <div id="error-message" class="error-message"></div>
+    <div id="debug-info" class="debug-info"></div>
   </div>
 </div>
 {% endif %}
@@ -76,6 +78,11 @@
 
   function getRandomUid() { return Math.floor(Math.random() * 10000) + 1; }
 
+  function logDebug(message) {
+    console.log(message);
+    document.getElementById('debug-info').textContent += message + '\n';
+  }
+
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = getRandomUid();
@@ -85,7 +92,7 @@
       const data = await response.json();
       const token = data.token;
       if (!token) throw new Error('No token received: ' + JSON.stringify(data));
-      console.log('Received token:', token, 'UID:', data.uid);
+      logDebug(`Received token: ${token}, UID: ${data.uid}`);
       if (isOrganizer) {
         rtc.client.setClientRole('host');
         await startLocalStream(token, data.uid);
@@ -94,22 +101,22 @@
         await joinChannel(token, data.uid);
       }
       rtc.client.on('stream-added', (evt) => {
-        console.log('Stream added:', evt.stream.getId(), 'from UID:', evt.stream.getId());
+        logDebug(`Stream added: ${evt.stream.getId()} from UID: ${evt.stream.getId()}`);
         rtc.client.subscribe(evt.stream, { audio: true, video: true });
       });
       rtc.client.on('stream-subscribed', (evt) => {
-        console.log('Stream subscribed:', evt.stream.getId());
+        logDebug(`Stream subscribed: ${evt.stream.getId()}`);
         rtc.remoteStream = evt.stream;
         const remoteVideo = document.getElementById('remoteVideo');
         if (remoteVideo) {
           remoteVideo.srcObject = new MediaStream(evt.stream.getTracks());
           remoteVideo.style.display = 'block';
         } else {
-          console.error('Remote video element not found');
+          logDebug('Remote video element not found');
         }
       });
       rtc.client.on('peer-leave', () => {
-        console.log('Peer left');
+        logDebug('Peer left');
         if (rtc.remoteStream) {
           rtc.remoteStream.close();
           document.getElementById('remoteVideo').style.display = 'none';
@@ -117,46 +124,46 @@
       });
       updateMemberList();
     } catch (err) {
-      console.error('Agora error:', err);
+      logDebug('Agora error: ' + err.message);
       document.getElementById('error-message').textContent = 'Agora initialization failed: ' + err.message;
     }
   }
 
   async function startLocalStream(token, uid) {
     try {
-      console.log('Initializing local stream for UID:', uid);
+      logDebug(`Initializing local stream for UID: ${uid}`);
       [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({ microphoneId: true, cameraId: true });
-      if (!rtc.localStream || !rtc.localStream.getTracks().some(track => track.kind === 'video')) {
-        console.error('No video track available, check camera permissions');
+      if (!rtc.localStream || !rtc.localStream.getTracks().some(track => track.kind === 'video' && track.enabled)) {
+        logDebug('No video track available or disabled, check camera permissions');
         document.getElementById('error-message').textContent = 'Please allow camera access to stream.';
         return;
       }
-      console.log('Local stream tracks:', rtc.localStream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled })));
+      logDebug('Local stream tracks: ' + JSON.stringify(rtc.localStream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled }))));
       await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 });
-      console.log('Joined channel as host, publishing stream');
-      await rtc.client.publish(rtc.localStream);
+      logDebug('Joined channel as host');
+      await rtc.client.publish(rtc.localStream).then(() => logDebug('Stream published successfully')).catch(err => logDebug('Publish error: ' + err));
       const localVideo = document.getElementById('localVideo');
       if (localVideo) {
         localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
         localVideo.style.display = 'block';
       } else {
-        console.error('Local video element not found');
+        logDebug('Local video element not found');
       }
-      console.log('Stream started for UID:', uid);
+      logDebug('Stream started for UID: ' + uid);
       createMember(uid);
     } catch (err) {
-      console.error('Stream error:', err);
+      logDebug('Stream error: ' + err.message);
       document.getElementById('error-message').textContent = 'Stream error: ' + err.message;
     }
   }
 
   async function joinChannel(token, uid) {
     try {
-      console.log('Joining channel as audience with UID:', uid);
-      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, () => console.log('Joined as viewer', uid), (err) => console.error('Join failed:', err));
+      logDebug(`Joining channel as audience with UID: ${uid}`);
+      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, () => logDebug('Joined as viewer'), (err) => logDebug('Join failed: ' + err));
       createMember(uid);
     } catch (err) {
-      console.error('Join error:', err);
+      logDebug('Join error: ' + err.message);
       document.getElementById('error-message').textContent = 'Join error: ' + err.message;
     }
   }
@@ -164,7 +171,7 @@
   function leaveChannel() {
     if (rtc.localStream) rtc.localStream.close();
     if (rtc.remoteStream) rtc.remoteStream.close();
-    rtc.client.leave(() => console.log('Left channel'), (err) => console.error('Leave error:', err));
+    rtc.client.leave(() => logDebug('Left channel'), (err) => logDebug('Leave error: ' + err));
     deleteMember();
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
@@ -175,7 +182,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: "{{ request.user.username|escapejs }}", UID: uid, room_name: CHANNEL })
-    }).catch(err => console.error('Member creation error:', err));
+    }).catch(err => logDebug('Member creation error: ' + err));
   }
 
   function deleteMember() {
@@ -183,7 +190,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: "{{ request.user.username|escapejs }}", UID: getRandomUid(), room_name: CHANNEL })
-    }).catch(err => console.error('Member deletion error:', err));
+    }).catch(err => logDebug('Member deletion error: ' + err));
   }
 
   function updateMemberList() {
@@ -195,7 +202,7 @@
           list.innerHTML = `<li>🟢 ${data.name}</li>`; // Simplify for now
         }
       })
-      .catch(err => console.error('Member list update error:', err));
+      .catch(err => logDebug('Member list update error: ' + err));
   }
 
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
