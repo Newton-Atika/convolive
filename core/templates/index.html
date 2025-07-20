@@ -4,130 +4,50 @@
   <meta charset="UTF-8">
   <title>{{ event.title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Agora Web SDK -->
   <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
-
   <style>
-    body {
-      background-color: #000;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-    }
-    .container {
-      max-width: 900px;
-      margin: auto;
-      padding: 1rem;
-    }
-    .video-box {
-      width: 100%;
-      background-color: #111;
-      padding: 1rem;
-      border-radius: 8px;
-      text-align: center;
-      border: 2px solid #333;
-      margin-bottom: 1rem;
-    }
-    #agora-video {
-      width: 100%;
-      max-height: 60vh;
-      border-radius: 10px;
-      border: 2px solid limegreen;
-      object-fit: cover;
-    }
-    .chat {
-      background-color: #111;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-top: 1rem;
-    }
-    input, select, button {
-      padding: 0.5rem;
-      border: none;
-      border-radius: 5px;
-      margin: 0.2rem;
-    }
-    input {
-      width: 70%;
-      background-color: #222;
-      color: #fff;
-    }
-    #sendBtn {
-      background-color: limegreen;
-      color: #000;
-      font-weight: bold;
-    }
-    #likeBtn {
-      background-color: #000;
-      color: white;
-      border: 2px solid red;
-      font-weight: bold;
-      transition: background 0.3s, color 0.3s;
-    }
-    #likeBtn.liked {
-      background-color: red;
-      color: #fff;
-    }
-    #leaveChatBtn {
-      background-color: #444;
-      color: #fff;
-      font-weight: bold;
-    }
-    #sendGiftBtn {
-      background-color: orange;
-      color: #000;
-      font-weight: bold;
-    }
-    .viewer-count {
-      margin-bottom: 1rem;
-    }
+    body { background-color: #000; color: #fff; font-family: 'Segoe UI', sans-serif; }
+    .container { max-width: 900px; margin: auto; padding: 1rem; }
+    .video-box { width: 100%; background-color: #111; padding: 1rem; border-radius: 8px; text-align: center; border: 2px solid #333; margin-bottom: 1rem; }
+    #agora-video { width: 100%; max-height: 60vh; border-radius: 10px; border: 2px solid limegreen; object-fit: cover; }
+    .chat { background-color: #111; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+    input, select, button { padding: 0.5rem; border: none; border-radius: 5px; margin: 0.2rem; }
+    input { width: 70%; background-color: #222; color: #fff; }
+    #sendBtn { background-color: limegreen; color: #000; font-weight: bold; }
+    #likeBtn { background-color: #000; color: white; border: 2px solid red; font-weight: bold; transition: background 0.3s, color 0.3s; }
+    #likeBtn.liked { background-color: red; color: #fff; }
+    #leaveChatBtn { background-color: #444; color: #fff; font-weight: bold; }
+    #sendGiftBtn { background-color: orange; color: #000; font-weight: bold; }
+    .viewer-count { margin-bottom: 1rem; }
   </style>
 </head>
 <body>
-
 {% if not event.is_live and not user_has_paid %}
-  <div class="payment-warning">
-    ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
-    <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
-  </div>
+  <div class="payment-warning">⚠️ You need to pay <strong>50 KES</strong> to join this conversation. <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a></div>
 {% else %}
 <div class="container">
   <h1>🎥 {{ event.title }}</h1>
-
   <div class="video-box">
-    <!-- Agora video area -->
     <div id="agora-video">
       <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
       <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
     </div>
-
     {% if user.pk == event.organizer.pk %}
       <form method="post" action="{% url 'end_event' event.id %}">
-        {% csrf_token %}
-        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
+        {% csrf_token %}<button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
       </form>
     {% endif %}
   </div>
-
   <div class="viewer-count">
     {% if user.pk == event.organizer.pk and participants %}
       👁️ Viewers: {{ participants|length }}
-      <div><strong>Joined Participants:</strong>
-        <ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul>
-      </div>
-    {% else %}
-      👁️ Viewers: {{ participant_count }}
-    {% endif %}
+      <div><strong>Joined Participants:</strong><ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul></div>
+    {% else %}👁️ Viewers: {{ participant_count }}{% endif %}
   </div>
-
   {% if user.pk == event.organizer.pk %}
-    <div id="micRequests">
-      <h3>🎤 Mic Requests</h3>
-      <ul id="requestList"></ul>
-    </div>
+    <div id="micRequests"><h3>🎤 Mic Requests</h3><ul id="requestList"></ul></div>
   {% endif %}
-
   <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
-
   <div class="chat">
     <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
     <input type="text" id="messageInput" placeholder="Type message...">
@@ -145,41 +65,24 @@
   </div>
 </div>
 {% endif %}
-
 <script>
-  // Agora configuration
   const CHANNEL = '{{ event.id|escapejs }}';
   const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
   const organizerId = "{{ organizer_id|default:'0' }}";
+  let rtc = { client: null, localStream: null, remoteStream: null };
 
-  let rtc = {
-    client: null,
-    localStream: null,
-    remoteStream: null
-  };
+  function getRandomUid() { return Math.floor(Math.random() * 10000) + 1; }
 
-  // Generate a random UID between 1 and 10000
-  function getRandomUid() {
-    return Math.floor(Math.random() * 10000) + 1;
-  }
-
-  // Initialize Agora client and fetch token
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = getRandomUid();
-
     try {
       const response = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Agora token: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`Token fetch failed: ${response.status} ${response.statusText}`);
       const data = await response.json();
       const token = data.token;
-      if (!token || typeof token !== 'string' || token.length === 0) {
-        throw new Error('Invalid Agora token received: ' + JSON.stringify(data));
-      }
+      if (!token) throw new Error('No token received: ' + JSON.stringify(data));
       console.log('Received token:', token);
-
       if (isOrganizer) {
         rtc.client.setClientRole('host');
         await startLocalStream(token, uid);
@@ -187,20 +90,12 @@
         rtc.client.setClientRole('audience');
         await joinChannel(token, uid);
       }
-
-      rtc.client.on('stream-added', (evt) => {
-        const stream = evt.stream;
-        rtc.client.subscribe(stream, (err) => console.log('Subscribe failed:', err));
-      });
-
+      rtc.client.on('stream-added', (evt) => rtc.client.subscribe(evt.stream));
       rtc.client.on('stream-subscribed', (evt) => {
-        const remoteStream = evt.stream;
-        rtc.remoteStream = remoteStream;
-        const remoteVideo = document.getElementById('remoteVideo');
-        remoteVideo.srcObject = new MediaStream(remoteStream.getTracks());
-        remoteVideo.style.display = 'block';
+        rtc.remoteStream = evt.stream;
+        document.getElementById('remoteVideo').srcObject = new MediaStream(evt.stream.getTracks());
+        document.getElementById('remoteVideo').style.display = 'block';
       });
-
       rtc.client.on('peer-leave', () => {
         if (rtc.remoteStream) {
           rtc.remoteStream.close();
@@ -208,218 +103,92 @@
         }
       });
     } catch (err) {
-      console.error('Agora initialization error:', err);
-      alert('Failed to initialize Agora. Check console for details or contact support.');
+      console.error('Agora error:', err);
+      alert('Agora failed. Check console or contact support.');
     }
   }
 
-  // Start local stream for organizer
   async function startLocalStream(token, uid) {
     try {
-      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({
-        microphoneId: null,
-        cameraId: null
-      });
-      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }); // Optional: Specify token expiry
+      [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks();
+      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 });
       await rtc.client.publish(rtc.localStream);
-      const localVideo = document.getElementById('localVideo');
-      localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
-      localVideo.style.display = 'block';
-      console.log('Local stream started successfully');
-    } catch (err) {
-      console.error('Start local stream error:', err);
-    }
+      document.getElementById('localVideo').srcObject = new MediaStream(rtc.localStream.getTracks());
+      document.getElementById('localVideo').style.display = 'block';
+      console.log('Stream started');
+    } catch (err) { console.error('Stream error:', err); }
   }
 
-  // Join channel for viewers
   async function joinChannel(token, uid) {
     try {
-      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, (uid) => {
-        console.log('Viewer joined channel', CHANNEL, 'with UID', uid);
-      }, (err) => console.error('Join channel failed:', err));
-    } catch (err) {
-      console.error('Join channel error:', err);
-    }
+      await rtc.client.join(token, CHANNEL, uid, { tokenExpiryTime: 3600 }, () => console.log('Joined as viewer', uid), (err) => console.error('Join failed:', err));
+    } catch (err) { console.error('Join error:', err); }
   }
 
-  // Leave channel
   function leaveChannel() {
     if (rtc.localStream) rtc.localStream.close();
     if (rtc.remoteStream) rtc.remoteStream.close();
-    rtc.client.leave(() => console.log('Channel left'), (err) => console.error('Leave error:', err));
+    rtc.client.leave(() => console.log('Left channel'), (err) => console.error('Leave error:', err));
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
 
-  // Initialize on load
-  window.onload = () => {
-    initAgora().catch(err => {
-      console.error('Agora initialization error:', err);
-      alert('Failed to initialize Agora. Check console for details or contact support.');
-    });
-  };
+  window.onload = () => initAgora().catch(console.error);
 
-  // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
   const user = "{{ request.user.username|escapejs }}";
   const eventId = "{{ event.id|escapejs }}";
-
   const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
   const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
   const streamSocket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${eventId}/`);
 
-  let liked = false;
-  let localMicStream = null;
+  let liked = false, localMicStream = null;
 
   function floatEmoji(content) {
-    const el = document.createElement("div");
-    el.className = "float-emoji";
-    el.innerText = content;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    const el = document.createElement("div"); el.className = "float-emoji"; el.innerText = content;
+    document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
   }
 
   function giftLabel(value) {
-    switch (value) {
-      case "10": return "🌹 Coin x10";
-      case "20": return "🍫 Coin x20";
-      case "50": return "⭐ Star x50";
-      default: return `🎁 Coin x${value}`;
-    }
+    return { '10': '🌹 Coin x10', '20': '🍫 Coin x20', '50': '⭐ Star x50' }[value] || `🎁 Coin x${value}`;
   }
 
-  // Stream handling
-  streamSocket.onopen = () => {
-    if (isOrganizer) {
-      streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-    } else {
-      streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user }));
-    }
-  };
+  streamSocket.onopen = () => (isOrganizer ? streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId })) : streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user })));
+  streamSocket.onmessage = async (e) => { if (JSON.parse(e.data).type === "live_started" && !isOrganizer) { const { token } = await (await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`)).json(); await joinChannel(token, getRandomUid()); } };
 
-  streamSocket.onmessage = async (e) => {
+  chatSocket.onmessage = (e) => {
     const data = JSON.parse(e.data);
-    if (data.type === "live_started" && !isOrganizer) {
-      console.log("🚀 Viewer received live_started signal");
-      const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-      if (!resp.ok) throw new Error(`Failed to fetch Agora token: ${resp.statusText}`);
-      const { token } = await resp.json();
-      const uid = getRandomUid();
-      await joinChannel(token, uid);
-    }
-  };
-
-  // CHAT SOCKET
-  chatSocket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
     if (data.type === "chat") {
-      const p = document.createElement("p");
-      p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-      const chatArea = document.getElementById("chatArea");
-      chatArea.appendChild(p);
-      chatArea.scrollTop = chatArea.scrollHeight;
+      const p = document.createElement("p"); p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+      document.getElementById("chatArea").appendChild(p).scrollIntoView();
     } else if (data.type === "mic_request" && isOrganizer) {
-      const li = document.createElement("li");
-      li.id = `mic-${data.username}`;
-      li.innerHTML = `${data.username} requests mic 
-        <button onclick="approveMic('${data.username}')">✅</button>
-        <button onclick="denyMic('${data.username}')">❌</button>`;
+      const li = document.createElement("li"); li.id = `mic-${data.username}`;
+      li.innerHTML = `${data.username} requests mic <button onclick="approveMic('${data.username}')">✅</button><button onclick="denyMic('${data.username}')">❌</button>`;
       document.getElementById("requestList").appendChild(li);
     } else if (data.type === "mic_approved") {
-      if (!isOrganizer && data.username === user) {
-        navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-          .then(stream => {
-            localMicStream = stream;
-            const video = document.getElementById("remoteVideo");
-            video.srcObject = stream;
-            video.style.display = "block";
-            floatEmoji("🎤🎥 You are live!");
-          })
-          .catch(err => alert(`Could not access camera/microphone: ${err.message}`));
-      } else {
-        document.getElementById(`mic-${data.username}`)?.remove();
-      }
-    } else if (data.type === "mic_denied") {
-      if (data.username === user) {
-        alert("❌ Your mic request was denied.");
-      } else {
-        document.getElementById(`mic-${data.username}`)?.remove();
-      }
-    } else if (data.type === "mic_revoked" && data.username === user) {
-      if (localMicStream) {
-        localMicStream.getTracks().forEach(t => t.stop());
-      }
-      localMicStream = null;
-      const video = document.getElementById("remoteVideo");
-      video.srcObject = null;
-      video.style.display = "none";
-      alert("🔇 Your mic/video access was revoked.");
-    }
+      if (!isOrganizer && data.username === user) navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => { localMicStream = stream; document.getElementById("remoteVideo").srcObject = stream; document.getElementById("remoteVideo").style.display = "block"; floatEmoji("🎤🎥 You are live!"); }).catch(err => alert(`Mic error: ${err.message}`));
+      else document.getElementById(`mic-${data.username}`)?.remove();
+    } else if (data.type === "mic_denied") (data.username === user ? alert("❌ Mic request denied.") : document.getElementById(`mic-${data.username}`)?.remove());
+    else if (data.type === "mic_revoked" && data.username === user) { if (localMicStream) localMicStream.getTracks().forEach(t => t.stop()); localMicStream = null; document.getElementById("remoteVideo").srcObject = null; document.getElementById("remoteVideo").style.display = "none"; alert("🔇 Mic revoked."); }
   };
 
-  // LIKE SOCKET
-  likeSocket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === "like_update") {
-      document.getElementById("likeCount").innerText = data.total_likes;
-      floatEmoji("❤️");
-    } else if (data.type === "gift") {
-      const p = document.createElement("p");
-      p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
-      p.style.color = "orange";
-      document.getElementById("chatArea").appendChild(p);
-      floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
-    } else if (data.type === "live_started") {
-      document.getElementById("videoPlaceholder")?.remove();
-    }
+  likeSocket.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === "like_update") { document.getElementById("likeCount").innerText = data.total_likes; floatEmoji("❤️"); }
+    else if (data.type === "gift") { const p = document.createElement("p"); p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`; p.style.color = "orange"; document.getElementById("chatArea").appendChild(p); floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`); }
+    else if (data.type === "live_started") document.getElementById("videoPlaceholder")?.remove();
   };
 
-  document.getElementById("sendBtn").onclick = () => {
-    const msg = document.getElementById("messageInput").value.trim();
-    if (msg && chatSocket.readyState === WebSocket.OPEN) {
-      chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-      document.getElementById("messageInput").value = "";
-    }
-  };
+  document.getElementById("sendBtn").onclick = () => { const msg = document.getElementById("messageInput").value.trim(); if (msg && chatSocket.readyState === WebSocket.OPEN) { chatSocket.send(JSON.stringify({ type: "message", message: msg })); document.getElementById("messageInput").value = ""; } };
+  document.getElementById("messageInput").addEventListener("keypress", e => e.key === "Enter" && document.getElementById("sendBtn").click());
+  document.getElementById("likeBtn").onclick = () => { if (likeSocket.readyState === WebSocket.OPEN) { likeSocket.send(JSON.stringify({ action: liked ? "unlike" : "like", event_id: eventId })); liked = !liked; document.getElementById("likeBtn").classList.toggle("liked", liked); } };
 
-  document.getElementById("messageInput").addEventListener("keypress", (e) => {
-    if (e.key === "Enter") document.getElementById("sendBtn").click();
-  });
+  function approveMic(username) { chatSocket.send(JSON.stringify({ type: "mic_approved", username })); }
+  function denyMic(username) { chatSocket.send(JSON.stringify({ type: "mic_denied", username })); }
+  function revokeMic(username) { chatSocket.send(JSON.stringify({ type: "mic_revoked", username })); }
 
-  document.getElementById("likeBtn").onclick = () => {
-    if (likeSocket.readyState === WebSocket.OPEN) {
-      likeSocket.send(JSON.stringify({
-        action: liked ? "unlike" : "like",
-        event_id: eventId
-      }));
-      liked = !liked;
-      document.getElementById("likeBtn").classList.toggle("liked", liked);
-    }
-  };
-
-  function approveMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
-  }
-  function denyMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
-  }
-  function revokeMic(username) {
-    chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
-  }
-
-  document.getElementById("leaveChatBtn").onclick = () => {
-    leaveChannel();
-    window.location.href = "{% url 'landing' %}";
-  };
-
-  const micBtn = document.getElementById("requestMicBtn");
-  if (micBtn) {
-    micBtn.onclick = () => {
-      chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-      micBtn.disabled = true;
-    };
-  }
+  document.getElementById("leaveChatBtn").onclick = () => { leaveChannel(); window.location.href = "{% url 'landing' %}"; };
+  const micBtn = document.getElementById("requestMicBtn"); if (micBtn) micBtn.onclick = () => { chatSocket.send(JSON.stringify({ type: "mic_request", username: user })); micBtn.disabled = true; };
 </script>
-
 </body>
 </html>
