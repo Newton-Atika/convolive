@@ -22,6 +22,6 @@ urlpatterns = [
     path('toggle-like/', views.toggle_like, name='toggle_like'),
     path('livekit/token/<int:event_id>/', views.get_livekit_token, name='get_livekit_token'),
     path('stream/<str:room_name>/', views.stream_view, name='stream'),
-    path('get-agora-token/', views.get_agora_token, name='get_agora_token'),
+    path('get_agora_token/', views.get_agora_token, name='get_agora_token'),
     path('events/<int:event_id>/join/', views.join_event, name='join_event'),
 ]
