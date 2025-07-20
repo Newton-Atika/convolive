@@ -79,9 +79,10 @@
   function getRandomUid() { return Math.floor(Math.random() * 10000) + 1; }
 
   function logDebug(message) {
-    console.log(message);
+    const timestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
+    console.log(`${timestamp}: ${message}`);
     const debugInfo = document.getElementById('debug-info');
-    if (debugInfo) debugInfo.textContent += new Date().toISOString() + ': ' + message + '\n';
+    if (debugInfo) debugInfo.textContent += `${timestamp}: ${message}\n`;
   }
 
   async function checkDevices() {
@@ -92,15 +93,18 @@
       if (videoDevices.length === 0) {
         logDebug('No video devices found, check hardware or permissions');
         document.getElementById('error-message').textContent = 'No camera detected. Check hardware or permissions.';
+        return false;
       }
+      return true;
     } catch (err) {
       logDebug('Device check error: ' + err.message);
       document.getElementById('error-message').textContent = 'Device check failed: ' + err.message;
+      return false;
     }
   }
 
   async function initAgora() {
-    await checkDevices();
+    if (!await checkDevices()) return;
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     const uid = getRandomUid();
     try {
@@ -128,6 +132,7 @@
         if (remoteVideo) {
           remoteVideo.srcObject = new MediaStream(evt.stream.getTracks());
           remoteVideo.style.display = 'block';
+          logDebug('Remote video stream assigned');
         } else {
           logDebug('Remote video element not found');
         }
@@ -149,11 +154,15 @@
   async function startLocalStream(token, uid) {
     try {
       logDebug(`Initializing local stream for UID: ${uid}`);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => logDebug('Camera access granted')).catch(err => {
+        logDebug('Camera access denied: ' + err.message);
+        document.getElementById('error-message').textContent = 'Camera access denied: ' + err.message;
+        return;
+      });
       [rtc.localStream] = await AgoraRTC.createMicrophoneAndCameraTracks({ microphoneId: true, cameraId: true });
       if (!rtc.localStream || !rtc.localStream.getTracks().some(track => track.kind === 'video' && track.enabled)) {
         logDebug('No video track available or disabled, check camera permissions');
-        document.getElementById('error-message').textContent = 'Please allow camera access to stream.';
+        document.getElementById('error-message').textContent = 'No video track. Please allow camera access.';
         return;
       }
       logDebug('Local stream tracks: ' + JSON.stringify(rtc.localStream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled }))));
@@ -169,14 +178,15 @@
         } catch (err) {
           publishAttempts++;
           logDebug(`Publish attempt ${publishAttempts} failed: ${err.message}`);
-          if (publishAttempts === maxAttempts) throw err;
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+          if (publishAttempts === maxAttempts) throw new Error('Failed to publish after ' + maxAttempts + ' attempts: ' + err.message);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       const localVideo = document.getElementById('localVideo');
       if (localVideo) {
         localVideo.srcObject = new MediaStream(rtc.localStream.getTracks());
         localVideo.style.display = 'block';
+        logDebug('Local video stream assigned');
       } else {
         logDebug('Local video element not found');
       }
