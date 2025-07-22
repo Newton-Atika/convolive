@@ -147,95 +147,74 @@
 {% endif %}
 
 <script>
-  // Agora configuration
   const CHANNEL = '{{ event.id|escapejs }}';
   const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
   const organizerId = "{{ event.organizer.pk|default:'0' }}";
 
   let rtc = {
     client: null,
-    localStream: null,
-    remoteStream: null
+    localTracks: [],
+    remoteUsers: {}
   };
 
-  // Initialize Agora client and fetch token
   async function initAgora() {
     rtc.client = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-    await rtc.client.init('5a7551a1892a47258b7e9f7f264e6196', () => console.log('Agora RTC client initialized'), (err) => console.error(err));
 
     const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
     if (!resp.ok) throw new Error('Failed to fetch Agora token');
     const { token, uid } = await resp.json();
 
+    await rtc.client.join('5a7551a1892a47258b7e9f7f264e6196', CHANNEL, token, uid);
+
     if (isOrganizer) {
-      rtc.client.setClientRole('host');
-      await startLocalStream(token, uid);
+      await rtc.client.setClientRole('host');
+      rtc.localTracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+      const localVideo = document.getElementById('localVideo');
+      localVideo.srcObject = new MediaStream([rtc.localTracks[1].getMediaStreamTrack()]);
+      localVideo.style.display = 'block';
+      await rtc.client.publish(rtc.localTracks);
     } else {
-      rtc.client.setClientRole('audience');
-      await joinChannel(token, uid);
+      await rtc.client.setClientRole('audience');
     }
 
-    rtc.client.on('stream-added', (evt) => {
-      const stream = evt.stream;
-      rtc.client.subscribe(stream, (err) => console.log('Subscribe failed', err));
-    });
-
-    rtc.client.on('stream-subscribed', (evt) => {
-      const remoteStream = evt.stream;
-      rtc.remoteStream = remoteStream;
-      const remoteVideo = document.getElementById('remoteVideo');
-      remoteVideo.srcObject = remoteStream.stream;
-      remoteVideo.style.display = 'block';
-    });
-
-    rtc.client.on('peer-leave', () => {
-      if (rtc.remoteStream) {
-        rtc.remoteStream.close();
-        document.getElementById('remoteVideo').style.display = 'none';
+    rtc.client.on('user-published', async (user, mediaType) => {
+      await rtc.client.subscribe(user, mediaType);
+      if (mediaType === 'video') {
+        const remoteVideo = document.getElementById('remoteVideo');
+        remoteVideo.srcObject = new MediaStream([user.videoTrack.getMediaStreamTrack()]);
+        remoteVideo.style.display = 'block';
+      }
+      if (mediaType === 'audio') {
+        user.audioTrack.play();
       }
     });
-  }
 
-  // Start local stream for organizer
-  async function startLocalStream(token, uid) {
-    rtc.localStream = await AgoraRTC.createStream({
-      video: true,
-      audio: true,
-      cameraId: null,
-      microphoneId: null
+    rtc.client.on('user-unpublished', (user) => {
+      const remoteVideo = document.getElementById('remoteVideo');
+      remoteVideo.srcObject = null;
+      remoteVideo.style.display = 'none';
     });
-    await rtc.localStream.init();
-    rtc.client.publish(rtc.localStream);
-    const localVideo = document.getElementById('localVideo');
-    localVideo.srcObject = rtc.localStream.stream;
-    localVideo.style.display = 'block';
-    await rtc.client.join(token, CHANNEL, uid, (uid) => console.log('User ' + uid + ' joined as host'));
+
+    rtc.client.on('user-left', (user) => {
+      const remoteVideo = document.getElementById('remoteVideo');
+      remoteVideo.srcObject = null;
+      remoteVideo.style.display = 'none';
+    });
   }
 
-  // Join channel for viewers
-  async function joinChannel(token, uid) {
-    await rtc.client.join(token, CHANNEL, uid, (uid) => {
-      console.log('User ' + uid + ' joined channel ' + CHANNEL + ' as audience');
-    }, (err) => console.error('Join channel failed', err));
-  }
-
-  // Leave channel
   function leaveChannel() {
-    if (rtc.localStream) rtc.localStream.close();
-    if (rtc.remoteStream) rtc.remoteStream.close();
-    rtc.client.leave(() => console.log('Channel left'), (err) => console.error(err));
+    rtc.localTracks.forEach(track => track.close());
+    rtc.client.leave();
     document.getElementById('localVideo').style.display = 'none';
     document.getElementById('remoteVideo').style.display = 'none';
   }
 
-  // Initialize on load
   window.onload = () => {
     initAgora().catch(err => {
       console.error('Agora initialization error:', err);
       alert('Failed to initialize Agora. Check console for details.');
     });
   };
-
   // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
   const user = "{{ request.user.username|escapejs }}";
