@@ -148,7 +148,6 @@
 
 <script>
 const CHANNEL = '{{ event.id|escapejs }}';
-const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
 const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
 const organizerId = "{{ event.organizer.pk|default:'0' }}";
