@@ -2,8 +2,6 @@ from django.urls import path
 from django.contrib.auth.views import LogoutView
 from . import views
 
-app_name = 'events'  # Namespace for this app
-
 urlpatterns = [
     path('', views.landing_page, name='landing'),
     path('get-agora-token/', views.get_agora_token, name='get_agora_token'),  # Standardized to hyphen
