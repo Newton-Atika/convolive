@@ -160,7 +160,7 @@ let rtc = {
 
 async function initAgora() {
   try {
-    const response = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
+    const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
     if (!response.ok) throw new Error('Failed to fetch Agora token');
     const { token, uid } = await response.json();
 
