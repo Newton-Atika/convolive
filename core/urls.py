@@ -23,5 +23,4 @@ urlpatterns = [
     path('event/<int:event_id>/', views.event_detail, name='event_detail'),
     path('stream/<int:event_id>/', views.stream_view, name='stream'),  # Using event_id for consistency
     path('toggle-like/', views.toggle_like, name='toggle_like'),
-    path('livekit/token/<int:event_id>/', views.get_livekit_token, name='get_livekit_token'),
 ]
