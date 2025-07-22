@@ -117,6 +117,14 @@ def generate_agora_token(channel_name, uid, role):
         raise
 
 
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import Event  # Adjust import as needed
+import logging
+
+logger = logging.getLogger(__name__)
+
 @login_required
 def get_agora_token(request):
     """API endpoint to get Agora token for a specific event."""
@@ -125,17 +133,12 @@ def get_agora_token(request):
         if not event_id:
             return JsonResponse({'error': 'Missing event_id parameter'}, status=400)
 
-        # Get the event and its UUID as the channel name
         event = get_object_or_404(Event, id=event_id)
-        channel_name = str(event.uuid)
+        channel_name = str(event.uuid)  # Use UUID for channel name consistency
+        uid = request.user.id or 0
 
-        # Use user ID as UID
-        uid = request.user.id
-
-        # Determine user role
         role = 'publisher' if request.user == event.organizer else 'subscriber'
 
-        # Generate Agora token
         token = generate_agora_token(channel_name, uid, role)
 
         return JsonResponse({
@@ -146,7 +149,7 @@ def get_agora_token(request):
         })
 
     except Exception as e:
-        logger.error(f"Error generating Agora token: {e}")
+        logger.exception("Failed to generate Agora token")
         return JsonResponse({'error': str(e)}, status=500)
 
 
