@@ -56,150 +56,101 @@ import os
 import logging
 
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-import random
 import time
-from agora_token_builder import RtcTokenBuilder
-from .models import LiveParticipant, Event  # Adjust model names as needed
-import json
-from django.views.decorators.http import require_GET, require_POST
-from django.views.decorators.csrf import csrf_exempt
 import os
 import logging
+from agora_token_builder import RtcTokenBuilder
+import random
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Load credentials from environment variables
-AGORA_APP_ID = os.getenv("AGORA_APP_ID", "5a7551a1892a47258b7e9f7f264e6196")
-AGORA_APP_CERTIFICATE = os.getenv("AGORA_APP_CERTIFICATE", "27b20c8f267e4235b207d6aef1bf7dea")
+# Load Agora credentials from environment variables
+AGORA_APP_ID = os.getenv('AGORA_APP_ID')
+AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE')
 
-def landing(request):
-    events = Event.objects.all()
-    return render(request, 'landing.html', {'events': events})
+def generate_agora_token(channel, uid, role):
+    """Generate an Agora AccessToken2 using the official SDK."""
+    try:
+        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
+        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
+        if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
+            raise ValueError("AGORA_APP_ID or AGORA_APP_CERTIFICATE not set")
+        expiration = int(time.time()) + 3600  # Token valid for 1 hour
+        role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
+        token = RtcTokenBuilder.buildTokenWithUid(
+            AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration
+        )
+        logger.debug(f"Generated token: {token}")
+        logger.debug(f"Token length: {len(token)}, ASCII: {all(ord(c) < 128 for c in token)}")
+        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
+            logger.error("Invalid token format")
+            raise ValueError("Invalid token format")
+        if not token.startswith("006" + AGORA_APP_ID):
+            logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
+            raise ValueError("Token prefix invalid")
+        return token
+    except Exception as e:
+        logger.error(f"Token generation failed: {str(e)}")
+        raise
 
+@login_required
+def get_agora_token(request):
+    """Endpoint to get Agora token and UID."""
+    try:
+        channel = str(request.GET.get('channel'))  # Ensure channel is a string
+        organizer_id = request.GET.get('organizer_id')
+        logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
+        if not channel or not organizer_id:
+            return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
+        uid = random.randint(0, 10000)  # Generate random UID
+        role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
+        token = generate_agora_token(channel, uid, role)
+        return JsonResponse({'token': token, 'uid': uid})
+    except Exception as e:
+        logger.error(f"Token endpoint error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
 def join_event(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
+
+    # Check if the live has ended
     try:
-        event = Event.objects.get(id=event_id)
-        user_has_paid = True  # Implement payment check logic
-        participants = LiveParticipant.objects.filter(event=event)
-        context = {
-            'event': event,
-            'user_has_paid': user_has_paid,
-            'participants': participants,
-            'organizer_id': event.organizer.id if event.organizer else 0,
-            'participant_count': participants.count(),
-        }
-        return render(request, 'index.html', context)
-    except Event.DoesNotExist:
-        return render(request, '404.html', status=404)
+        status = LiveStatus.objects.get(event=event)
+        if not status.is_active:
+            return render(request, 'live_has_ended.html', {'event': event})
+    except LiveStatus.DoesNotExist:
+        pass
 
-def end_event(request, event_id):
-    # Existing end event logic
-    pass
+    # If the event is not live, ensure payment is made
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            return redirect('pay_event', event_id=event.id)
 
-def getToken(request):
-    channel = request.GET.get('channel')
-    if not channel:
-        return JsonResponse({'error': 'Channel is required'}, status=400)
-    uid = random.randint(1, 230)
-    current_time = int(time.time())
-    expiration = current_time + 3600  # 1 hour
+    # Add the user as a live participant
+    LiveParticipant.objects.get_or_create(event=event, user=request.user)
 
-    token = RtcTokenBuilder.buildTokenWithUid(
-        AGORA_APP_ID,
-        AGORA_APP_CERTIFICATE,
-        channel,
-        uid,
-        1,
-        expiration
-    )
+    # Get participant count
+    participant_count = LiveParticipant.objects.filter(event=event).count()
 
-    logger.debug(f"Generated token for channel {channel}, uid {uid}: {token}")
-    return JsonResponse({'token': token, 'uid': uid}, safe=False)
+    # If organizer, list all participants
+    participants = []
+    if request.user == event.organizer:
+        participants = LiveParticipant.objects.filter(event=event).select_related('user')
 
-@require_POST
-def createMember(request):
-    try:
-        data = json.loads(request.body)
-        member, created = LiveParticipant.objects.get_or_create(
-            user__username=data['name'],  # Adjust field based on your model
-            uid=data['UID'],
-            event_id=data['room_name']  # Use event_id as room_name
-        )
-        return JsonResponse({'name': data['name']}, safe=False)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
-def getMember(request):
-    uid = request.GET.get('UID')
-    room_name = request.GET.get('room_name')
-    if not uid or not room_name:
-        return JsonResponse({'error': 'UID and room_name are required'}, status=400)
-    try:
-        member = LiveParticipant.objects.get(uid=uid, event_id=room_name)
-        return JsonResponse({'name': member.user.username}, safe=False)  # Adjust field
-    except LiveParticipant.DoesNotExist:
-        return JsonResponse({'error': 'Member not found'}, status=404)
-
-@require_POST
-def deleteMember(request):
-    try:
-        data = json.loads(request.body)
-        member = LiveParticipant.objects.get(
-            user__username=data['name'],
-            uid=data['UID'],
-            event_id=data['room_name']
-        )
-        member.delete()
-        return JsonResponse('Member deleted', safe=False)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except LiveParticipant.DoesNotExist:
-        return JsonResponse({'error': 'Member not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-def create_token(identity, room, can_publish=False):
-    now = int(time.time())
-    exp = now + 3600  # Token valid for 1 hour
-
-    payload = {
-        "jti": f"{identity}-{now}",
-        "iss": settings.LIVEKIT_API_KEY,
-        "sub": identity,
-        "aud": "livekit",
-        "exp": exp,
-        "nbf": now,
-        "video": {
-            "roomJoin": True,
-            "room": room,
-            "canPublish": can_publish,
-            "canSubscribe": True,
-        },
-    }
-
-    token = jwt.encode(payload, settings.LIVEKIT_API_SECRET, algorithm="HS256")
-    return token
-
-
-def get_livekit_token(request, event_id):
-    user = request.user
-    room = f"event_{event_id}"
-
-    # Only the organizer is allowed to publish
-    event = Event.objects.get(pk=event_id)
-    can_publish = user.pk == event.organizer_id
-
-    token = create_token(user.username, room, can_publish)
-
-    return JsonResponse({
-        "token": token,
-        "url": settings.LIVEKIT_URL,
-        "room": room
+    return render(request, 'index.html', {
+        'event': event,
+        'participants': participants,
+        'participant_count': participant_count,
+        'organizer_id': event.organizer.pk,
+        'mux_playback_id': event.mux_playback_id,
     })
-
 
 def create_event(request):
     if request.method == 'POST':
