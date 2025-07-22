@@ -75,46 +75,69 @@ logger = logging.getLogger(__name__)
 AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
 AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
 
-from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-import os
-import time
+# views.py
+
 import logging
-from .models import Event
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+import json
+
+from .RtcTokenBuilder import RtcTokenBuilder  # your custom token builder
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-def generate_agora_token(channel_name, uid, role):
-    """Generate Agora AccessToken2 with full privilege control."""
+@csrf_exempt
+@require_POST
+def generate_agora_token(request):
+    """
+    Django view to generate Agora RTC token using UID and privilege control.
+    Expects JSON body with: "channel_name", "uid"
+    """
     try:
-        if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
-            raise ValueError("Agora credentials are not set.")
+        if not hasattr(settings, AGORA_APP_ID) or not hasattr(settings, AGORA_APP_CERTIFICATE):
+            return JsonResponse({"error": "Agora credentials are not configured."}, status=500)
 
-        # Expiration settings
-        token_expiration_in_seconds = 3600
-        join_channel_privilege_expiration_in_seconds = 3600
-        pub_audio_privilege_expiration_in_seconds = 3600
-        pub_video_privilege_expiration_in_seconds = 3600
-        pub_data_stream_privilege_expiration_in_seconds = 3600
+        body = json.loads(request.body)
+        channel_name = body.get("channel_name")
+        uid = body.get("uid")
+
+        if not channel_name or uid is None:
+            return JsonResponse({"error": "Missing required fields: channel_name and uid."}, status=400)
+
+        # Expiration in seconds
+        token_expire = 3600  # 1 hour
+        join_expire = 3600
+        audio_expire = 3600
+        video_expire = 3600
+        data_expire = 3600
 
         token = RtcTokenBuilder.build_token_with_uid_and_privilege(
-            AGORA_APP_ID,
-            AGORA_APP_CERTIFICATE,
-            channel_name,
-            uid,
-            token_expiration_in_seconds,
-            join_channel_privilege_expiration_in_seconds,
-            pub_audio_privilege_expiration_in_seconds,
-            pub_video_privilege_expiration_in_seconds,
-            pub_data_stream_privilege_expiration_in_seconds
+            app_id=settings.AGORA_APP_ID,
+            app_certificate=settings.AGORA_APP_CERTIFICATE,
+            channel_name=channel_name,
+            uid=str(uid),
+            token_expire=token_expire,
+            join_channel_privilege_expire=join_expire,
+            pub_audio_privilege_expire=audio_expire,
+            pub_video_privilege_expire=video_expire,
+            pub_data_stream_privilege_expire=data_expire
         )
 
-        return token
+        return JsonResponse({
+            "token": token,
+            "channel_name": channel_name,
+            "uid": uid,
+            "expires_in": token_expire
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON input."}, status=400)
 
     except Exception as e:
-        logger.error(f"Token generation failed: {str(e)}")
-        raise
+        logger.exception("Token generation failed")
+        return JsonResponse({"error": f"Token generation failed: {str(e)}"}, status=500)
 
 
 from django.http import JsonResponse
