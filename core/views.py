@@ -65,8 +65,7 @@ import logging
 from agora_token_builder import RtcTokenBuilder
 import random
 
-from . import RtcTokenBuilder2 
-from RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
+from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
