@@ -134,7 +134,9 @@ def get_agora_token(request):
             return JsonResponse({'error': 'Missing event_id parameter'}, status=400)
 
         event = get_object_or_404(Event, id=event_id)
-        channel_name = str(event.uuid)  # Use UUID for channel name consistency
+
+        # Fallback to using event.id as the channel name
+        channel_name = str(event.id)
         uid = request.user.id or 0
 
         role = 'publisher' if request.user == event.organizer else 'subscriber'
@@ -147,7 +149,6 @@ def get_agora_token(request):
             'channel': channel_name,
             'role': role,
         })
-
     except Exception as e:
         logger.exception("Failed to generate Agora token")
         return JsonResponse({'error': str(e)}, status=500)
