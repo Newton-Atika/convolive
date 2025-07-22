@@ -65,38 +65,48 @@ import logging
 from agora_token_builder import RtcTokenBuilder
 import random
 
+from RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load Agora credentials from environment variables
-AGORA_APP_ID = os.getenv('AGORA_APP_ID')
-AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE')
+AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
+AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
 
 def generate_agora_token(channel, uid, role):
-    """Generate an Agora AccessToken2 using the official SDK."""
+    """Generate an Agora AccessToken2 using the official SDK (RtcTokenBuilder2)."""
     try:
         logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
-        logger.debug(f"Environment: AGORA_APP_ID={AGORA_APP_ID}, AGORA_APP_CERTIFICATE set={bool(AGORA_APP_CERTIFICATE)}")
         if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
             raise ValueError("AGORA_APP_ID or AGORA_APP_CERTIFICATE not set")
-        expiration = int(time.time()) + 3600  # Token valid for 1 hour
-        role_type = 1 if role == 'publisher' else 2  # 1 = Publisher, 2 = Subscriber
-        token = RtcTokenBuilder.buildTokenWithUid(
-            AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, uid, role_type, expiration
+
+        # Define expiration times
+        token_expiration_in_seconds = 3600  # 1 hour
+        privilege_expiration_in_seconds = 3600
+
+        # Determine role type
+        role_type = Role_Publisher if role == 'publisher' else Role_Subscriber
+
+        # Generate token using AccessToken2 (new SDK)
+        token = RtcTokenBuilder.build_token_with_uid(
+            AGORA_APP_ID,
+            AGORA_APP_CERTIFICATE,
+            channel,
+            uid,
+            role_type,
+            token_expiration_in_seconds,
+            privilege_expiration_in_seconds
         )
+
         logger.debug(f"Generated token: {token}")
-        logger.debug(f"Token length: {len(token)}, ASCII: {all(ord(c) < 128 for c in token)}")
-        if not token or len(token) > 2047 or not all(ord(c) < 128 for c in token):
-            logger.error("Invalid token format")
-            raise ValueError("Invalid token format")
-        if not token.startswith("006" + AGORA_APP_ID):
-            logger.error(f"Token prefix mismatch: expected '006{AGORA_APP_ID}', got '{token[:len('006' + AGORA_APP_ID)]}'")
-            raise ValueError("Token prefix invalid")
         return token
+
     except Exception as e:
         logger.error(f"Token generation failed: {str(e)}")
         raise
+
 
 @login_required
 def get_agora_token(request):
