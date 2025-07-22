@@ -75,32 +75,48 @@ logger = logging.getLogger(__name__)
 AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
 AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
 
-def generate_agora_token(channel, uid, role):
-    """Generate an Agora AccessToken2 using the official SDK (RtcTokenBuilder2)."""
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from src.RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
+import os
+import time
+import logging
+from .models import Event
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Load Agora credentials
+AGORA_APP_ID = os.getenv("AGORA_APP_ID")
+AGORA_APP_CERTIFICATE = os.getenv("AGORA_APP_CERTIFICATE")
+
+
+def generate_agora_token(channel_name, uid, role):
+    """Generate Agora AccessToken2 with full privilege control."""
     try:
-        logger.debug(f"Generating token with: channel={channel}, uid={uid}, role={role}")
         if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
-            raise ValueError("AGORA_APP_ID or AGORA_APP_CERTIFICATE not set")
+            raise ValueError("Agora credentials are not set.")
 
-        # Define expiration times
-        token_expiration_in_seconds = 3600  # 1 hour
-        privilege_expiration_in_seconds = 3600
+        # Expiration settings
+        token_expiration_in_seconds = 3600
+        join_channel_privilege_expiration_in_seconds = 3600
+        pub_audio_privilege_expiration_in_seconds = 3600
+        pub_video_privilege_expiration_in_seconds = 3600
+        pub_data_stream_privilege_expiration_in_seconds = 3600
 
-        # Determine role type
-        role_type = Role_Publisher if role == 'publisher' else Role_Subscriber
-
-        # Generate token using AccessToken2 (new SDK)
-        token = RtcTokenBuilder.build_token_with_uid(
+        token = RtcTokenBuilder.build_token_with_uid_and_privilege(
             AGORA_APP_ID,
             AGORA_APP_CERTIFICATE,
-            channel,
+            channel_name,
             uid,
-            role_type,
             token_expiration_in_seconds,
-            privilege_expiration_in_seconds
+            join_channel_privilege_expiration_in_seconds,
+            pub_audio_privilege_expiration_in_seconds,
+            pub_video_privilege_expiration_in_seconds,
+            pub_data_stream_privilege_expiration_in_seconds
         )
 
-        logger.debug(f"Generated token: {token}")
         return token
 
     except Exception as e:
@@ -110,20 +126,36 @@ def generate_agora_token(channel, uid, role):
 
 @login_required
 def get_agora_token(request):
-    """Endpoint to get Agora token and UID."""
+    """API endpoint to get Agora token for a specific event."""
     try:
-        channel = str(request.GET.get('channel'))  # Ensure channel is a string
-        organizer_id = request.GET.get('organizer_id')
-        logger.debug(f"Request params: channel={channel}, organizer_id={organizer_id}")
-        if not channel or not organizer_id:
-            return JsonResponse({'error': 'Missing channel or organizer_id'}, status=400)
-        uid = random.randint(0, 10000)  # Generate random UID
-        role = 'publisher' if request.user.pk == int(organizer_id) else 'subscriber'
-        token = generate_agora_token(channel, uid, role)
-        return JsonResponse({'token': token, 'uid': uid})
+        event_id = request.GET.get("event_id")
+        if not event_id:
+            return JsonResponse({'error': 'Missing event_id parameter'}, status=400)
+
+        # Get the event and its UUID as the channel name
+        event = get_object_or_404(Event, id=event_id)
+        channel_name = str(event.uuid)
+
+        # Use user ID as UID
+        uid = request.user.id
+
+        # Determine user role
+        role = 'publisher' if request.user == event.organizer else 'subscriber'
+
+        # Generate Agora token
+        token = generate_agora_token(channel_name, uid, role)
+
+        return JsonResponse({
+            'token': token,
+            'uid': uid,
+            'channel': channel_name,
+            'role': role,
+        })
+
     except Exception as e:
-        logger.error(f"Token endpoint error: {str(e)}")
+        logger.error(f"Error generating Agora token: {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def join_event(request, event_id):
