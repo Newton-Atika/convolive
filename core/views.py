@@ -79,19 +79,12 @@ AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-from src.RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 import os
 import time
 import logging
 from .models import Event
 
-# Setup logging
 logger = logging.getLogger(__name__)
-
-# Load Agora credentials
-AGORA_APP_ID = os.getenv("AGORA_APP_ID")
-AGORA_APP_CERTIFICATE = os.getenv("AGORA_APP_CERTIFICATE")
-
 
 def generate_agora_token(channel_name, uid, role):
     """Generate Agora AccessToken2 with full privilege control."""
