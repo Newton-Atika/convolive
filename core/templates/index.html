@@ -151,11 +151,6 @@ const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
 const organizerId = "{{ event.organizer.pk|default:'0' }}";
 const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
-let rtc = {
-  client: null,
-  localAudioTrack: null,
-  localVideoTrack: null,
-};
 
 // Ensure WebSocket is initialized early
 const WEBSOCKET_URL = 'wss://web-production-816d1.up.railway.app/ws/stream/'; // Adjust to your WebSocket URL
