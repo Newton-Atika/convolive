@@ -190,7 +190,6 @@ function initializeWebSocket() {
 }
 
 const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
-
 async function initAgora() {
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
