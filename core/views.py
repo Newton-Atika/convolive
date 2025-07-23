@@ -74,8 +74,6 @@ logger = logging.getLogger(__name__)
 AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
 AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
 
-# views.py
-
 import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -83,26 +81,26 @@ from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
 import json
 from django.conf import settings
+from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
+from .models import Event  # Adjust based on your app structure
 
 logger = logging.getLogger(__name__)
 
-def build_agora_token(channel_name, uid, app_id, app_certificate):
-    token_expire = 3600
-    join_expire = 3600
-    audio_expire = 3600
-    video_expire = 3600
-    data_expire = 3600
+def build_agora_token(channel_name, uid, role, app_id, app_certificate):
+    token_expire = 3600  # 1 hour
+    privilege_expire = 3600  # 1 hour
 
-    token = RtcTokenBuilder.build_token_with_uid_and_privilege(
-        app_id=AGORA_APP_ID,
-        app_certificate=AGORA_APP_CERTIFICATE,
+    # Map role to Agora's Role_Publisher or Role_Subscriber
+    agora_role = Role_Publisher if role == 'publisher' else Role_Subscriber
+
+    token = RtcTokenBuilder.build_token_with_uid(
+        app_id=app_id,
+        app_certificate=app_certificate,
         channel_name=channel_name,
         uid=str(uid),
+        role=agora_role,
         token_expire=token_expire,
-        join_channel_privilege_expire=join_expire,
-        pub_audio_privilege_expire=audio_expire,
-        pub_video_privilege_expire=video_expire,
-        pub_data_stream_privilege_expire=data_expire
+        privilege_expire=privilege_expire
     )
     return token, token_expire
 
@@ -116,6 +114,7 @@ def generate_agora_token(request):
         body = json.loads(request.body)
         channel_name = body.get("channel_name")
         uid = body.get("uid")
+        role = body.get("role", "subscriber")  # Default to subscriber
 
         if not channel_name or uid is None:
             return JsonResponse({"error": "Missing required fields: channel_name and uid."}, status=400)
@@ -123,6 +122,7 @@ def generate_agora_token(request):
         token, token_expire = build_agora_token(
             channel_name=channel_name,
             uid=uid,
+            role=role,
             app_id=settings.AGORA_APP_ID,
             app_certificate=settings.AGORA_APP_CERTIFICATE
         )
@@ -131,6 +131,7 @@ def generate_agora_token(request):
             "token": token,
             "channel_name": channel_name,
             "uid": uid,
+            "role": role,
             "expires_in": token_expire
         })
 
@@ -154,8 +155,9 @@ def get_agora_token(request):
         token, token_expire = build_agora_token(
             channel_name=channel_name,
             uid=uid,
-            app_id=AGORA_APP_ID,
-            app_certificate=AGORA_APP_CERTIFICATE
+            role=role,
+            app_id=settings.AGORA_APP_ID,
+            app_certificate=settings.AGORA_APP_CERTIFICATE
         )
 
         return JsonResponse({
@@ -167,7 +169,6 @@ def get_agora_token(request):
     except Exception as e:
         logger.exception("Failed to generate Agora token")
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @login_required
 def join_event(request, event_id):
