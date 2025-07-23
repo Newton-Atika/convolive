@@ -66,38 +66,41 @@ from django.conf import settings
 from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 from .models import Event  # Adjust based on your app structure
 
+# Global constants
+AGORA_APP_ID = getattr(settings, 'AGORA_APP_ID', None)
+AGORA_APP_CERTIFICATE = getattr(settings, 'AGORA_APP_CERTIFICATE', None)
+TOKEN_EXPIRE = 3600  # 1 hour
+PRIVILEGE_EXPIRE = 3600  # 1 hour
+
 logger = logging.getLogger(__name__)
 
-def build_agora_token(channel_name, uid, role, app_id, app_certificate):
-    token_expire = 3600  # 1 hour
-    privilege_expire = 3600  # 1 hour
+def build_agora_token(channel_name, uid, role):
+    if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
+        logger.error("Agora credentials are not configured.")
+        raise ValueError("Agora credentials are not configured.")
 
     # Map role to Agora's Role_Publisher or Role_Subscriber
     agora_role = Role_Publisher if role == 'publisher' else Role_Subscriber
 
-    logger.debug(f"Generating token with app_id={app_id}, channel={channel_name}, uid={uid}, role={agora_role}, expire={token_expire}")
+    logger.debug(f"Generating token with app_id={AGORA_APP_ID}, channel={channel_name}, uid={uid}, role={agora_role}, expire={TOKEN_EXPIRE}")
 
     token = RtcTokenBuilder.build_token_with_uid(
-        app_id=app_id,
-        app_certificate=app_certificate,
+        app_id=AGORA_APP_ID,
+        app_certificate=AGORA_APP_CERTIFICATE,
         channel_name=channel_name,
         uid=str(uid),
         role=agora_role,
-        token_expire=token_expire,
-        privilege_expire=privilege_expire
+        token_expire=TOKEN_EXPIRE,
+        privilege_expire=PRIVILEGE_EXPIRE
     )
 
     logger.debug(f"Generated token: {token}")
-    return token, token_expire
+    return token, TOKEN_EXPIRE
 
 @csrf_exempt
 @require_POST
 def generate_agora_token(request):
     try:
-        if not hasattr(settings, 'AGORA_APP_ID') or not hasattr(settings, 'AGORA_APP_CERTIFICATE'):
-            logger.error("Agora credentials are not configured in settings.")
-            return JsonResponse({"error": "Agora credentials are not configured."}, status=500)
-
         body = json.loads(request.body)
         channel_name = body.get("channel_name")
         uid = body.get("uid")
@@ -110,9 +113,7 @@ def generate_agora_token(request):
         token, token_expire = build_agora_token(
             channel_name=channel_name,
             uid=uid,
-            role=role,
-            app_id=settings.AGORA_APP_ID,
-            app_certificate=settings.AGORA_APP_CERTIFICATE
+            role=role
         )
 
         return JsonResponse({
@@ -126,6 +127,9 @@ def generate_agora_token(request):
     except json.JSONDecodeError:
         logger.error("Invalid JSON input.")
         return JsonResponse({"error": "Invalid JSON input."}, status=400)
+    except ValueError as e:
+        logger.error(f"Token generation failed: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         logger.exception(f"Token generation failed: {str(e)}")
         return JsonResponse({"error": f"Token generation failed: {str(e)}"}, status=500)
@@ -147,9 +151,7 @@ def get_agora_token(request):
         token, token_expire = build_agora_token(
             channel_name=channel_name,
             uid=uid,
-            role=role,
-            app_id=settings.AGORA_APP_ID,
-            app_certificate=settings.AGORA_APP_CERTIFICATE
+            role=role
         )
 
         return JsonResponse({
@@ -158,6 +160,9 @@ def get_agora_token(request):
             'channel': channel_name,
             'role': role,
         })
+    except ValueError as e:
+        logger.error(f"Failed to generate Agora token: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         logger.exception(f"Failed to generate Agora token: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
