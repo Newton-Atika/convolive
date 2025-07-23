@@ -65,7 +65,7 @@ import logging
 from agora_token_builder import RtcTokenBuilder
 import random
 
-from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber,build_token_with_uid_and_privilege
+from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -95,7 +95,7 @@ def build_agora_token(channel_name, uid, app_id, app_certificate):
     video_expire = 3600
     data_expire = 3600
 
-    token = build_token_with_uid_and_privilege(
+    token = RtcTokenBuilder.build_token_with_uid_and_privilege(
         app_id=AGORA_APP_ID,
         app_certificate=AGORA_APP_CERTIFICATE,
         channel_name=channel_name,
