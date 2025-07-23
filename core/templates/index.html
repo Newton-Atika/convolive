@@ -148,21 +148,29 @@
 <script>
 const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const CHANNEL = '{{ event.id|escapejs }}';
-const isOrganizer = {{ is_organizer|lower }};
-const WEBSOCKET_URL = `wss://web-production-816d1.up.railway.app/ws/stream/<event_id>/`;
+const isOrganizer = {{ is_organizer|safe }};
+const eventIsLive = {{ event.is_live|lower|safe }};
+const userHasPaid = {{ user_has_paid|lower|safe }};
+const WEBSOCKET_URL = `wss://web-production-816d1.up.railway.app/ws/stream/${CHANNEL}/`;
 let streamSocket;
 
 function initializeWebSocket() {
     try {
         streamSocket = new WebSocket(WEBSOCKET_URL);
-        streamSocket.onopen = () => console.log(`WebSocket connected for event ${CHANNEL}`);
+        streamSocket.onopen = () => {
+            console.log(`WebSocket connected for event ${CHANNEL}`);
+            if (isOrganizer && eventIsLive) {
+                streamSocket.send(JSON.stringify({ type: "live_started" }));
+                console.log("Sent live_started message");
+            }
+        };
         streamSocket.onerror = (error) => {
             console.error('WebSocket error:', error);
-            setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+            setTimeout(initializeWebSocket, 5000);
         };
         streamSocket.onclose = () => {
             console.log('WebSocket closed');
-            setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+            setTimeout(initializeWebSocket, 5000);
         };
         streamSocket.onmessage = async (e) => {
             const data = JSON.parse(e.data);
@@ -181,15 +189,31 @@ function initializeWebSocket() {
                     console.error("Error joining channel on live_started:", err);
                     alert(`Failed to join channel: ${err.message}`);
                 }
+            } else if (data.type === "mic_request") {
+                if (isOrganizer) {
+                    const requestList = document.getElementById("requestList");
+                    const li = document.createElement("li");
+                    li.textContent = `🎤 ${data.username} requested mic`;
+                    requestList.appendChild(li);
+                }
+            } else if (data.type === "like_update") {
+                const likeButton = document.querySelector(".like-button"); // Adjust selector
+                if (likeButton) {
+                    likeButton.textContent = `❤️ Like (${data.total_likes})`;
+                }
+            } else if (data.type === "gift") {
+                console.log(`Gift received: ${data.gift} from ${data.user}`);
+                // Update UI for gifts (e.g., show notification)
             }
         };
     } catch (err) {
         console.error('Failed to initialize WebSocket:', err);
-        setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+        setTimeout(initializeWebSocket, 5000);
     }
 }
 
 const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
+
 async function initAgora() {
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
@@ -246,25 +270,18 @@ async function initAgora() {
 async function joinChannel(token, uid) {
     console.log(`Joining channel ${CHANNEL} with uid ${uid}, token: ${token}`);
     await rtc.client.join(APP_ID, CHANNEL, token, uid);
-    if (isOrganizer) {
-        await rtc.client.setClientRole("host");
-        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-        const localVideo = document.getElementById("localVideo");
-        rtc.localVideoTrack.play(localVideo);
-        localVideo.style.display = "block";
-        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-        console.log("Published local tracks.");
-    } else {
-        await rtc.client.setClientRole("audience");
-        console.log("Joined as audience.");
-    }
+    await rtc.client.setClientRole("audience");
+    console.log("Joined as audience.");
 }
 
 window.onload = () => {
-    initializeWebSocket();
-    if (isOrganizer) {
-        initAgora();
+    if (eventIsLive || userHasPaid) {
+        initializeWebSocket();
+        if (isOrganizer) {
+            initAgora();
+        }
+    } else {
+        console.log("Event is not live and user has not paid. Waiting for payment.");
     }
 };
   // WebSocket and other logic
