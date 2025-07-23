@@ -157,6 +157,25 @@ let rtc = {
   localVideoTrack: null,
 };
 
+// Ensure WebSocket is initialized early
+const WEBSOCKET_URL = 'wss://web-production-816d1.up.railway.app/ws/stream/'; // Adjust to your WebSocket URL
+let streamSocket;
+
+try {
+    streamSocket = new WebSocket(WEBSOCKET_URL);
+    streamSocket.onopen = () => console.log('WebSocket connected');
+    streamSocket.onerror = (error) => console.error('WebSocket error:', error);
+    streamSocket.onclose = () => console.log('WebSocket closed');
+} catch (err) {
+    console.error('Failed to initialize WebSocket:', err);
+    alert('Failed to connect to WebSocket. Check console for details.');
+}
+
+const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
+const CHANNEL = '{{ event.id|escapejs }}'; // Ensure this is set in your template
+const isOrganizer = {{ is_organizer|lower }}; // Ensure this is set in your template
+const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
+
 async function initAgora() {
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
@@ -247,6 +266,13 @@ async function joinChannel(token, uid) {
         console.log("Joined as audience.");
     }
 }
+
+window.onload = () => {
+    if (isOrganizer) {
+        initAgora();
+    }
+    // For non-organizers, initAgora is triggered by streamSocket.onmessage
+};
   // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
   const user = "{{ request.user.username|escapejs }}";
