@@ -62,7 +62,6 @@ from django.http import JsonResponse
 import time
 import os
 import logging
-from agora_token_builder import RtcTokenBuilder
 import random
 
 from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
@@ -84,7 +83,6 @@ from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
 import json
 from django.conf import settings
-from agora_token_builder import RtcTokenBuilder
 
 logger = logging.getLogger(__name__)
 
