@@ -272,7 +272,6 @@ window.onload = () => {
 
   const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
   const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
-  const streamSocket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${eventId}/`);
 
   let liked = false;
   let localMicStream = null;
