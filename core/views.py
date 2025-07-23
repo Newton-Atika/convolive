@@ -194,11 +194,12 @@ def join_event(request, event_id):
     participants = []
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
-
+    is_organizer = request.user.is_authenticated and request.user == event.organizer
     return render(request, 'index.html', {
         'event': event,
         'participants': participants,
         'participant_count': participant_count,
+        'is_organizer': 'true' if is_organizer else 'false',
         'organizer_id': event.organizer.pk,
         'mux_playback_id': event.mux_playback_id,
     })
