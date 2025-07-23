@@ -242,26 +242,31 @@ window.onload = () => {
     }
   }
 
-  // Stream handling (simplified for Agora)
-  streamSocket.onopen = () => {
-    if (isOrganizer) {
-      // Stream started via Agora
-      streamSocket.send(JSON.stringify({ type: "live_started", event_id: eventId }));
-    } else {
-      streamSocket.send(JSON.stringify({ type: "check_stream", viewer_id: user }));
-    }
-  };
-
-  streamSocket.onmessage = async (e) => {
+streamSocket.onmessage = async (e) => {
     const data = JSON.parse(e.data);
     if (data.type === "live_started" && !isOrganizer) {
-      console.log("🚀 Viewer received live_started signal");
-      const resp = await fetch(`/get-agora-token/?channel=${CHANNEL}&organizer_id=${organizerId}`);
-      if (!resp.ok) throw new Error('Failed to fetch Agora token');
-      const { token, uid } = await resp.json();
-      await joinChannel(token, uid);
+        console.log("🚀 Viewer received live_started signal");
+        const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
+        if (!resp.ok) throw new Error('Failed to fetch Agora token');
+        const { token, uid } = await resp.json();
+        await joinChannel(token, uid);
     }
-  };
+};
+
+async function joinChannel(token, uid) {
+    await rtc.client.join(APP_ID, CHANNEL, token, uid);
+    if (isOrganizer) {
+        await rtc.client.setClientRole("host");
+        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+        const localVideo = document.getElementById("localVideo");
+        rtc.localVideoTrack.play(localVideo);
+        localVideo.style.display = "block";
+        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+    } else {
+        await rtc.client.setClientRole("audience");
+    }
+}
 
   // CHAT SOCKET
   chatSocket.onmessage = (event) => {
