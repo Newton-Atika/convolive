@@ -96,8 +96,8 @@ def build_agora_token(channel_name, uid, app_id, app_certificate):
     data_expire = 3600
 
     token = RtcTokenBuilder.build_token_with_uid_and_privilege(
-        app_id=app_id,
-        app_certificate=app_certificate,
+        app_id=AGORA_APP_ID,
+        app_certificate=AGORA_APP_CERTIFICATE,
         channel_name=channel_name,
         uid=str(uid),
         token_expire=token_expire,
