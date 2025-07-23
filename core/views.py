@@ -56,24 +56,6 @@ import os
 import logging
 
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-import time
-import os
-import logging
-import random
-
-from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-# Load Agora credentials from environment variables
-AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
-AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
-
 import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -84,7 +66,7 @@ from django.conf import settings
 from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 from .models import Event  # Adjust based on your app structure
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(name)
 
 def build_agora_token(channel_name, uid, role, app_id, app_certificate):
     token_expire = 3600  # 1 hour
@@ -92,6 +74,8 @@ def build_agora_token(channel_name, uid, role, app_id, app_certificate):
 
     # Map role to Agora's Role_Publisher or Role_Subscriber
     agora_role = Role_Publisher if role == 'publisher' else Role_Subscriber
+
+    logger.debug(f"Generating token with app_id={app_id}, channel={channel_name}, uid={uid}, role={agora_role}, expire={token_expire}")
 
     token = RtcTokenBuilder.build_token_with_uid(
         app_id=app_id,
@@ -102,6 +86,8 @@ def build_agora_token(channel_name, uid, role, app_id, app_certificate):
         token_expire=token_expire,
         privilege_expire=privilege_expire
     )
+
+    logger.debug(f"Generated token: {token}")
     return token, token_expire
 
 @csrf_exempt
@@ -109,6 +95,7 @@ def build_agora_token(channel_name, uid, role, app_id, app_certificate):
 def generate_agora_token(request):
     try:
         if not hasattr(settings, 'AGORA_APP_ID') or not hasattr(settings, 'AGORA_APP_CERTIFICATE'):
+            logger.error("Agora credentials are not configured in settings.")
             return JsonResponse({"error": "Agora credentials are not configured."}, status=500)
 
         body = json.loads(request.body)
@@ -117,6 +104,7 @@ def generate_agora_token(request):
         role = body.get("role", "subscriber")  # Default to subscriber
 
         if not channel_name or uid is None:
+            logger.error("Missing required fields: channel_name or uid.")
             return JsonResponse({"error": "Missing required fields: channel_name and uid."}, status=400)
 
         token, token_expire = build_agora_token(
@@ -136,21 +124,25 @@ def generate_agora_token(request):
         })
 
     except json.JSONDecodeError:
+        logger.error("Invalid JSON input.")
         return JsonResponse({"error": "Invalid JSON input."}, status=400)
     except Exception as e:
-        logger.exception("Token generation failed")
+        logger.exception(f"Token generation failed: {str(e)}")
         return JsonResponse({"error": f"Token generation failed: {str(e)}"}, status=500)
 
 def get_agora_token(request):
     try:
         event_id = request.GET.get("event_id")
         if not event_id:
+            logger.error("Missing event_id parameter.")
             return JsonResponse({'error': 'Missing event_id parameter'}, status=400)
 
         event = get_object_or_404(Event, id=event_id)
         channel_name = str(event.id)
         uid = request.user.id if request.user.is_authenticated else 0
         role = 'publisher' if request.user.is_authenticated and request.user == event.organizer else 'subscriber'
+
+        logger.debug(f"Generating token for event_id={event_id}, channel={channel_name}, uid={uid}, role={role}")
 
         token, token_expire = build_agora_token(
             channel_name=channel_name,
@@ -167,9 +159,8 @@ def get_agora_token(request):
             'role': role,
         })
     except Exception as e:
-        logger.exception("Failed to generate Agora token")
+        logger.exception(f"Failed to generate Agora token: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-
 @login_required
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
