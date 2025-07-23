@@ -84,7 +84,6 @@ from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
 import json
 from django.conf import settings
-from your_app.models import Event  # Replace with your app name
 from agora_token_builder import RtcTokenBuilder
 
 logger = logging.getLogger(__name__)
