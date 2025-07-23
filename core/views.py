@@ -156,8 +156,8 @@ def get_agora_token(request):
         token, token_expire = build_agora_token(
             channel_name=channel_name,
             uid=uid,
-            app_id=settings.AGORA_APP_ID,
-            app_certificate=settings.AGORA_APP_CERTIFICATE
+            app_id=AGORA_APP_ID,
+            app_certificate=AGORA_APP_CERTIFICATE
         )
 
         return JsonResponse({
