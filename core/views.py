@@ -81,20 +81,39 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
 import json
 from django.conf import settings
+from your_app.models import Event  # Replace with your app name
+from agora_token_builder import RtcTokenBuilder
 
 logger = logging.getLogger(__name__)
+
+def build_agora_token(channel_name, uid, app_id, app_certificate):
+    token_expire = 3600
+    join_expire = 3600
+    audio_expire = 3600
+    video_expire = 3600
+    data_expire = 3600
+
+    token = RtcTokenBuilder.build_token_with_uid_and_privilege(
+        app_id=app_id,
+        app_certificate=app_certificate,
+        channel_name=channel_name,
+        uid=str(uid),
+        token_expire=token_expire,
+        join_channel_privilege_expire=join_expire,
+        pub_audio_privilege_expire=audio_expire,
+        pub_video_privilege_expire=video_expire,
+        pub_data_stream_privilege_expire=data_expire
+    )
+    return token, token_expire
 
 @csrf_exempt
 @require_POST
 def generate_agora_token(request):
-    """
-    Django view to generate Agora RTC token using UID and privilege control.
-    Expects JSON body with: "channel_name", "uid"
-    """
     try:
-        if not hasattr(settings, AGORA_APP_ID) or not hasattr(settings, AGORA_APP_CERTIFICATE):
+        if not hasattr(settings, 'AGORA_APP_ID') or not hasattr(settings, 'AGORA_APP_CERTIFICATE'):
             return JsonResponse({"error": "Agora credentials are not configured."}, status=500)
 
         body = json.loads(request.body)
@@ -104,23 +123,11 @@ def generate_agora_token(request):
         if not channel_name or uid is None:
             return JsonResponse({"error": "Missing required fields: channel_name and uid."}, status=400)
 
-        # Expiration in seconds
-        token_expire = 3600  # 1 hour
-        join_expire = 3600
-        audio_expire = 3600
-        video_expire = 3600
-        data_expire = 3600
-
-        token = RtcTokenBuilder.build_token_with_uid_and_privilege(
-            app_id=settings.AGORA_APP_ID,
-            app_certificate=settings.AGORA_APP_CERTIFICATE,
+        token, token_expire = build_agora_token(
             channel_name=channel_name,
-            uid=str(uid),
-            token_expire=token_expire,
-            join_channel_privilege_expire=join_expire,
-            pub_audio_privilege_expire=audio_expire,
-            pub_video_privilege_expire=video_expire,
-            pub_data_stream_privilege_expire=data_expire
+            uid=uid,
+            app_id=settings.AGORA_APP_ID,
+            app_certificate=settings.AGORA_APP_CERTIFICATE
         )
 
         return JsonResponse({
@@ -132,37 +139,27 @@ def generate_agora_token(request):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON input."}, status=400)
-
     except Exception as e:
         logger.exception("Token generation failed")
         return JsonResponse({"error": f"Token generation failed: {str(e)}"}, status=500)
 
-
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.decorators import login_required
-from .models import Event  # Adjust import as needed
-import logging
-
-logger = logging.getLogger(__name__)
-
-@login_required
 def get_agora_token(request):
-    """API endpoint to get Agora token for a specific event."""
     try:
         event_id = request.GET.get("event_id")
         if not event_id:
             return JsonResponse({'error': 'Missing event_id parameter'}, status=400)
 
         event = get_object_or_404(Event, id=event_id)
-
-        # Fallback to using event.id as the channel name
         channel_name = str(event.id)
-        uid = request.user.id or 0
+        uid = request.user.id if request.user.is_authenticated else 0
+        role = 'publisher' if request.user.is_authenticated and request.user == event.organizer else 'subscriber'
 
-        role = 'publisher' if request.user == event.organizer else 'subscriber'
-
-        token = generate_agora_token(channel_name, uid, role)
+        token, token_expire = build_agora_token(
+            channel_name=channel_name,
+            uid=uid,
+            app_id=settings.AGORA_APP_ID,
+            app_certificate=settings.AGORA_APP_CERTIFICATE
+        )
 
         return JsonResponse({
             'token': token,
