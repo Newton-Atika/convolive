@@ -274,7 +274,7 @@ async function joinChannel(token, uid) {
 }
 
 window.onload = () => {
-    if (eventIsLive || userHasPaid) {
+    if (eventIsLive) {
         initializeWebSocket();
         if (isOrganizer) {
             initAgora();
