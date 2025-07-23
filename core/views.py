@@ -66,7 +66,7 @@ from django.conf import settings
 from .RtcTokenBuilder2 import RtcTokenBuilder, Role_Publisher, Role_Subscriber
 from .models import Event  # Adjust based on your app structure
 
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 
 def build_agora_token(channel_name, uid, role, app_id, app_certificate):
     token_expire = 3600  # 1 hour
