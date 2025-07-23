@@ -188,7 +188,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
 
-          # Organizer detection
+        # Organizer detection
         self.is_organizer = self.user.is_authenticated and self.scope["session"].get("organizer_pk") == str(self.user.pk)
 
         if self.is_organizer:
@@ -224,22 +224,22 @@ class StreamConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(
                 self.group_name,
                 {"type": "broadcast_live_started"}
-              )
+            )
         elif msg_type == "check_stream":
             if self.event_id in StreamConsumer.organizers:
                 await self.send(json.dumps({"type": "stream_active"}))
                 print(f"[CHECK_STREAM] Organizer live for event {self.event_id}")
             else:
                 print(f"[CHECK_STREAM] Organizer not live for event {self.event_id}")
-         elif msg_type == "mic_request" and not self.is_organizer:
+        elif msg_type == "mic_request" and not self.is_organizer:
             print(f"[MIC_REQUEST] {self.username} for event {self.event_id}")
             await self.channel_layer.group_send(
                 self.group_name,
-                  {
-                   "type": "mic_request",
-                     "username": self.username
-                  }
-              )
+                {
+                    "type": "mic_request",
+                    "username": self.username
+                }
+            )
         elif msg_type == "like_update":
             print(f"[LIKE_UPDATE] {self.username} action: {data['action']}")
             await self.channel_layer.group_send(
@@ -247,18 +247,18 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 {
                     "type": "like_update",
                     "total_likes": data.get("total_likes", 0)
-                 }
-             )
+                }
+            )
         elif msg_type == "gift":
             print(f"[GIFT] {data['gift']} from {self.username}")
             await self.channel_layer.group_send(
                 self.group_name,
-                 {
-                   "type": "gift",
-                   "gift": data["gift"],
-                  "user": self.username
+                {
+                    "type": "gift",
+                    "gift": data["gift"],
+                    "user": self.username
                 }
-              )
+            )
 
     async def broadcast_live_started(self, event):
         print(f"[BROADCAST_LIVE_STARTED] Sending to group stream_{self.event_id}")
@@ -268,17 +268,17 @@ class StreamConsumer(AsyncWebsocketConsumer):
         await self.send(json.dumps({
             "type": "mic_request",
             "username": event["username"]
-         }))
+        }))
 
     async def like_update(self, event):
-         await self.send(json.dumps({
+        await self.send(json.dumps({
             "type": "like_update",
-          "total_likes": event["total_likes"]
+            "total_likes": event["total_likes"]
         }))
 
     async def gift(self, event):
         await self.send(json.dumps({
-             "type": "gift",
-             "gift": event["gift"],
-              "user": event["user"]
+            "type": "gift",
+            "gift": event["gift"],
+            "user": event["user"]
         }))
