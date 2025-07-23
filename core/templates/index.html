@@ -157,7 +157,7 @@ function initializeWebSocket() {
     try {
         streamSocket = new WebSocket(WEBSOCKET_URL);
         streamSocket.onopen = () => {
-            console.log(`WebSocket connected for event ${CHANNEL}`);
+            console.log(`WebSocket connected for event ${CHANNEL} (isOrganizer: ${isOrganizer})`);
             if (isOrganizer && eventIsLive) {
                 streamSocket.send(JSON.stringify({ type: "live_started" }));
                 console.log("Sent live_started message");
@@ -173,36 +173,37 @@ function initializeWebSocket() {
         };
         streamSocket.onmessage = async (e) => {
             const data = JSON.parse(e.data);
+            console.log('WebSocket message received:', data);
             if (data.type === "live_started" && !isOrganizer) {
                 console.log("🚀 Viewer received live_started signal");
                 try {
                     const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
                     if (!resp.ok) {
                         const errorText = await resp.text();
-                        throw new Error(`Failed to fetch Agora token: ${errorText}`);
+                        console.error(`Viewer failed to fetch token: ${errorText}`);
+                        throw new Error(`Viewer failed to fetch token: ${errorText}`);
                     }
-                    const { token, uid } = await resp.json();
-                    console.log(`Fetched token for live_started: ${token}, uid: ${uid}`);
+                    const { token, uid, role } = await resp.json();
+                    console.log(`Viewer fetched token: ${token}, uid: ${uid}, role: ${role}`);
                     await joinChannel(token, uid);
                 } catch (err) {
-                    console.error("Error joining channel on live_started:", err);
+                    console.error("Viewer join error:", err);
                     alert(`Failed to join channel: ${err.message}`);
                 }
-            } else if (data.type === "mic_request") {
-                if (isOrganizer) {
-                    const requestList = document.getElementById("requestList");
-                    const li = document.createElement("li");
-                    li.textContent = `🎤 ${data.username} requested mic`;
-                    requestList.appendChild(li);
-                }
+            } else if (data.type === "mic_request" && isOrganizer) {
+                const requestList = document.getElementById("requestList");
+                const li = document.createElement("li");
+                li.textContent = `🎤 ${data.username} requested mic`;
+                requestList.appendChild(li);
             } else if (data.type === "like_update") {
-                const likeButton = document.querySelector(".like-button"); // Adjust selector
+                const likeButton = document.querySelector(".like-button");
                 if (likeButton) {
                     likeButton.textContent = `❤️ Like (${data.total_likes})`;
                 }
             } else if (data.type === "gift") {
                 console.log(`Gift received: ${data.gift} from ${data.user}`);
-                // Update UI for gifts (e.g., show notification)
+            } else if (data.type === "stream_active") {
+                console.log("Stream is active for event", CHANNEL);
             }
         };
     } catch (err) {
@@ -218,47 +219,74 @@ async function initAgora() {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Failed to fetch Agora token: ${errorText}`);
+            console.error(`Organizer failed to fetch token: ${errorText}`);
+            throw new Error(`Organizer failed to fetch token: ${errorText}`);
         }
         const { token, uid, role } = await response.json();
-        console.log(`Fetched token: ${token}, uid: ${uid}, role: ${role}, channel: ${CHANNEL}, app_id: ${APP_ID}`);
+        console.log(`Organizer fetched token: ${token}, uid: ${uid}, role: ${role}, channel: ${CHANNEL}, app_id: ${APP_ID}`);
 
         rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
 
         rtc.client.on("user-published", async (user, mediaType) => {
-            await rtc.client.subscribe(user, mediaType);
-            console.log(`User ${user.uid} published ${mediaType}`);
-            if (mediaType === "video") {
-                const remoteVideo = document.getElementById("remoteVideo");
-                user.videoTrack.play(remoteVideo);
-                remoteVideo.style.display = "block";
-            }
-            if (mediaType === "audio") {
-                user.audioTrack.play();
+            try {
+                console.log(`User ${user.uid} published ${mediaType}`);
+                await rtc.client.subscribe(user, mediaType);
+                console.log(`Subscribed to user ${user.uid} ${mediaType}`);
+                if (mediaType === "video") {
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    if (remoteVideo) {
+                        user.videoTrack.play(remoteVideo);
+                        remoteVideo.style.display = "block";
+                        console.log(`Playing video for user ${user.uid} on remoteVideo`);
+                    } else {
+                        console.error("remoteVideo element not found");
+                    }
+                }
+                if (mediaType === "audio") {
+                    user.audioTrack.play();
+                    console.log(`Playing audio for user ${user.uid}`);
+                }
+            } catch (err) {
+                console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
             }
         });
 
         rtc.client.on("user-unpublished", (user) => {
             console.log(`User ${user.uid} unpublished`);
             const remoteVideo = document.getElementById("remoteVideo");
-            remoteVideo.style.display = "none";
+            if (remoteVideo) {
+                remoteVideo.style.display = "none";
+            }
         });
 
+        console.log(`Attempting to join channel ${CHANNEL} with uid ${uid}, token: ${token}`);
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
         console.log(`Joined channel ${CHANNEL} as uid ${uid}`);
 
         if (isOrganizer) {
             await rtc.client.setClientRole("host");
-            rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-            rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-            const localVideo = document.getElementById("localVideo");
-            rtc.localVideoTrack.play(localVideo);
-            localVideo.style.display = "block";
-            await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-            console.log("Published local tracks.");
+            console.log("Set client role to host");
+            try {
+                rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                console.log("Created local audio and video tracks");
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    rtc.localVideoTrack.play(localVideo);
+                    localVideo.style.display = "block";
+                    console.log("Playing local video");
+                } else {
+                    console.error("localVideo element not found");
+                }
+                await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+                console.log("Published local audio and video tracks");
+            } catch (err) {
+                console.error("Failed to publish tracks:", err);
+                alert(`Failed to publish video: ${err.message}`);
+            }
         } else {
             await rtc.client.setClientRole("audience");
-            console.log("Joined as audience.");
+            console.log("Set client role to audience");
         }
     } catch (err) {
         console.error("Agora initialization error:", err);
@@ -267,14 +295,87 @@ async function initAgora() {
 }
 
 async function joinChannel(token, uid) {
-    console.log(`Joining channel ${CHANNEL} with uid ${uid}, token: ${token}`);
-    await rtc.client.join(APP_ID, CHANNEL, token, uid);
-    await rtc.client.setClientRole("audience");
-    console.log("Joined as audience.");
+    try {
+        console.log(`Viewer joining channel ${CHANNEL} with uid ${uid}, token: ${token}`);
+        if (!rtc.client) {
+            rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+            console.log("Created viewer Agora client");
+            rtc.client.on("user-published", async (user, mediaType) => {
+                try {
+                    console.log(`Viewer: User ${user.uid} published ${mediaType}`);
+                    await rtc.client.subscribe(user, mediaType);
+                    console.log(`Viewer: Subscribed to user ${user.uid} ${mediaType}`);
+                    if (mediaType === "video") {
+                        const remoteVideo = document.getElementById("remoteVideo");
+                        if (remoteVideo) {
+                            user.videoTrack.play(remoteVideo);
+                            remoteVideo.style.display = "block";
+                            console.log(`Viewer: Playing video for user ${user.uid} on remoteVideo`);
+                        } else {
+                            console.error("Viewer: remoteVideo element not found");
+                        }
+                    }
+                    if (mediaType === "audio") {
+                        user.audioTrack.play();
+                        console.log(`Viewer: Playing audio for user ${user.uid}`);
+                    }
+                } catch (err) {
+                    console.error(`Viewer: Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
+                }
+            });
+            rtc.client.on("user-unpublished", (user) => {
+                console.log(`Viewer: User ${user.uid} unpublished`);
+                const remoteVideo = document.getElementById("remoteVideo");
+                if (remoteVideo) {
+                    remoteVideo.style.display = "none";
+                }
+            });
+        }
+        await rtc.client.join(APP_ID, CHANNEL, token, uid);
+        await rtc.client.setClientRole("audience");
+        console.log("Viewer joined as audience");
+    } catch (err) {
+        console.error("Viewer join error:", err);
+        alert(`Failed to join channel: ${err.message}`);
+    }
+}
+
+function sendLike(action) {
+    if (streamSocket.readyState === WebSocket.OPEN) {
+        streamSocket.send(JSON.stringify({
+            type: "like_update",
+            action: action,
+            event_id: CHANNEL
+        }));
+        console.log(`Sent like action: ${action}`);
+    }
+}
+
+function sendGift(gift) {
+    if (streamSocket.readyState === WebSocket.OPEN) {
+        streamSocket.send(JSON.stringify({
+            type: "gift",
+            gift: gift,
+            event_id: CHANNEL
+        }));
+        console.log(`Sent gift: ${gift}`);
+    }
+}
+
+function leaveChat() {
+    if (rtc.client) {
+        rtc.client.leave();
+        console.log("Left Agora channel");
+    }
+    if (streamSocket.readyState === WebSocket.OPEN) {
+        streamSocket.close();
+        console.log("Closed WebSocket");
+    }
 }
 
 window.onload = () => {
     if (eventIsLive) {
+        console.log("Initializing WebSocket and Agora");
         initializeWebSocket();
         if (isOrganizer) {
             initAgora();
