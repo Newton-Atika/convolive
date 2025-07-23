@@ -150,7 +150,6 @@ const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = {{ is_organizer|safe }};
 const eventIsLive = {{ event.is_live|lower|safe }};
-const userHasPaid = {{ user_has_paid|lower|safe }};
 const WEBSOCKET_URL = `wss://web-production-816d1.up.railway.app/ws/stream/${CHANNEL}/`;
 let streamSocket, reconnectAttempts = 0, maxReconnectAttempts = 5;
 
