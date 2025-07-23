@@ -161,6 +161,9 @@ function initializeWebSocket() {
             if (isOrganizer && eventIsLive) {
                 streamSocket.send(JSON.stringify({ type: "live_started" }));
                 console.log("Sent live_started message");
+            } else {
+                streamSocket.send(JSON.stringify({ type: "check_stream" }));
+                console.log("Sent check_stream message");
             }
         };
         streamSocket.onerror = (error) => {
@@ -174,8 +177,8 @@ function initializeWebSocket() {
         streamSocket.onmessage = async (e) => {
             const data = JSON.parse(e.data);
             console.log('WebSocket message received:', data);
-            if (data.type === "live_started" && !isOrganizer) {
-                console.log("🚀 Viewer received live_started signal");
+            if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
+                console.log("🚀 Viewer received live_started/stream_active signal");
                 try {
                     const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
                     if (!resp.ok) {
@@ -202,8 +205,6 @@ function initializeWebSocket() {
                 }
             } else if (data.type === "gift") {
                 console.log(`Gift received: ${data.gift} from ${data.user}`);
-            } else if (data.type === "stream_active") {
-                console.log("Stream is active for event", CHANNEL);
             }
         };
     } catch (err) {
