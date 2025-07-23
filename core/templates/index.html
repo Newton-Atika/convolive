@@ -146,27 +146,50 @@
 {% endif %}
 
 <script>
-const CHANNEL = '{{ event.id|escapejs }}';
 const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
-const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
-const organizerId = "{{ event.organizer.pk|default:'0' }}";
-const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
-
-// Ensure WebSocket is initialized early
-const WEBSOCKET_URL = 'wss://web-production-816d1.up.railway.app/ws/stream/'; // Adjust to your WebSocket URL
+const CHANNEL = '{{ event.id|escapejs }}';
+const isOrganizer = {{ is_organizer|lower }};
+const WEBSOCKET_URL = `wss://web-production-816d1.up.railway.app/ws/stream/${CHANNEL}/`;
 let streamSocket;
 
-try {
-    streamSocket = new WebSocket(WEBSOCKET_URL);
-    streamSocket.onopen = () => console.log('WebSocket connected');
-    streamSocket.onerror = (error) => console.error('WebSocket error:', error);
-    streamSocket.onclose = () => console.log('WebSocket closed');
-} catch (err) {
-    console.error('Failed to initialize WebSocket:', err);
-    alert('Failed to connect to WebSocket. Check console for details.');
+function initializeWebSocket() {
+    try {
+        streamSocket = new WebSocket(WEBSOCKET_URL);
+        streamSocket.onopen = () => console.log(`WebSocket connected for event ${CHANNEL}`);
+        streamSocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+        };
+        streamSocket.onclose = () => {
+            console.log('WebSocket closed');
+            setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+        };
+        streamSocket.onmessage = async (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === "live_started" && !isOrganizer) {
+                console.log("🚀 Viewer received live_started signal");
+                try {
+                    const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
+                    if (!resp.ok) {
+                        const errorText = await resp.text();
+                        throw new Error(`Failed to fetch Agora token: ${errorText}`);
+                    }
+                    const { token, uid } = await resp.json();
+                    console.log(`Fetched token for live_started: ${token}, uid: ${uid}`);
+                    await joinChannel(token, uid);
+                } catch (err) {
+                    console.error("Error joining channel on live_started:", err);
+                    alert(`Failed to join channel: ${err.message}`);
+                }
+            }
+        };
+    } catch (err) {
+        console.error('Failed to initialize WebSocket:', err);
+        setTimeout(initializeWebSocket, 5000); // Retry after 5 seconds
+    }
 }
 
-
+const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
 
 async function initAgora() {
     try {
@@ -221,26 +244,6 @@ async function initAgora() {
     }
 }
 
-streamSocket.onmessage = async (e) => {
-    const data = JSON.parse(e.data);
-    if (data.type === "live_started" && !isOrganizer) {
-        console.log("🚀 Viewer received live_started signal");
-        try {
-            const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
-            if (!resp.ok) {
-                const errorText = await resp.text();
-                throw new Error(`Failed to fetch Agora token: ${errorText}`);
-            }
-            const { token, uid } = await resp.json();
-            console.log(`Fetched token for live_started: ${token}, uid: ${uid}`);
-            await joinChannel(token, uid);
-        } catch (err) {
-            console.error("Error joining channel on live_started:", err);
-            alert(`Failed to join channel: ${err.message}`);
-        }
-    }
-};
-
 async function joinChannel(token, uid) {
     console.log(`Joining channel ${CHANNEL} with uid ${uid}, token: ${token}`);
     await rtc.client.join(APP_ID, CHANNEL, token, uid);
@@ -260,10 +263,10 @@ async function joinChannel(token, uid) {
 }
 
 window.onload = () => {
+    initializeWebSocket();
     if (isOrganizer) {
         initAgora();
     }
-    // For non-organizers, initAgora is triggered by streamSocket.onmessage
 };
   // WebSocket and other logic
   const wsScheme = location.protocol === "https:" ? "wss" : "ws";
