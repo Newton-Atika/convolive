@@ -160,6 +160,9 @@ MUX_TOKEN_SECRET="3NWHhMxwOs1pT3qRHIl8Qv94oJhbWL19tXfW5RHUMSLugYoSYCCv93NTDrZ1dO
 # Add this if not already present
 TEMPLATES[0]['DIRS'] = [os.path.join(BASE_DIR, 'templates')]
 
+AGORA_APP_ID = "5a7551a1892a47258b7e9f7f264e6196"
+AGORA_APP_CERTIFICATE = "bdb8aaf7ba0b43158903b14b54758fa9"
+
 STATIC_URL = '/static/'
 #STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 PAYSTACK_SECRET_KEY = "sk_test_d50b2d43213a91922470eee1eea7fee305c3beff"
