@@ -28,8 +28,8 @@
         }
         #agora-video {
             width: 100%;
-            aspect-ratio: 16 / 9; /* Maintain 16:9 aspect ratio */
-            max-height: 60vh;
+            aspect-ratio: 9 / 16; /* Portrait aspect ratio */
+            max-height: 70vh; /* Cover more than half the screen */
             border-radius: 10px;
             border: 2px solid limegreen;
             overflow: hidden; /* Prevent overflow */
@@ -107,7 +107,7 @@
         /* Mobile-specific adjustments */
         @media (max-width: 600px) {
             #agora-video {
-                max-height: 40vh; /* Reduce height on smaller screens */
+                max-height: 60vh; /* Slightly smaller for mobile to prevent overflow */
             }
             .container {
                 padding: 0.5rem;
