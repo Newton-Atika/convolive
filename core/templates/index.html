@@ -68,14 +68,17 @@
             color: #000;
             font-weight: bold;
         }
-        #likeBtn {
+        .reaction-btn {
             background-color: #000;
             color: white;
             border: 2px solid red;
             font-weight: bold;
             transition: background 0.3s, color 0.3s;
+            cursor: pointer;
+            padding: 0.5rem 0.8rem;
+            margin: 0.2rem;
         }
-        #likeBtn.liked {
+        .reaction-btn.liked {
             background-color: red;
             color: #fff;
         }
@@ -99,6 +102,13 @@
             font-size: 1.5rem;
             animation: float 4s ease-in-out forwards;
         }
+        .float-emoji-alt {
+            position: absolute;
+            top: 50%; /* Start from middle of video section */
+            right: 10px; /* Align to right side of screen with slight margin */
+            font-size: 1.5rem;
+            animation: float-alt 4s ease-in-out forwards;
+        }
         @keyframes float {
             0% {
                 opacity: 1;
@@ -112,6 +122,25 @@
             }
             75% {
                 transform: translateY(-75vh) translateX(20px); /* Wave to the right again */
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100vh) translateX(0); /* End at top, centered */
+            }
+        }
+        @keyframes float-alt {
+            0% {
+                opacity: 1;
+                transform: translateY(0) translateX(0);
+            }
+            25% {
+                transform: translateY(-25vh) translateX(10px); /* Smaller wave to the right */
+            }
+            50% {
+                transform: translateY(-50vh) translateX(-10px); /* Smaller wave to the left */
+            }
+            75% {
+                transform: translateY(-75vh) translateX(10px); /* Smaller wave to the right again */
             }
             100% {
                 opacity: 0;
@@ -170,7 +199,15 @@
                 <ul id="requestList"></ul>
             </div>
         {% endif %}
-        <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
+        <div class="reactions">
+            <button class="reaction-btn" data-emoji="❤️" data-is-heart="true">❤️ Like (<span id="likeCount">0</span>)</button>
+            <button class="reaction-btn" data-emoji="😂">😂</button>
+            <button class="reaction-btn" data-emoji="🤣">🤣</button>
+            <button class="reaction-btn" data-emoji="😅">😅</button>
+            <button class="reaction-btn" data-emoji="🥰">🥰</button>
+            <button class="reaction-btn" data-emoji="😱">😱</button>
+            <button class="reaction-btn" data-emoji="💔">💔</button>
+        </div>
         <div class="chat">
             <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
             <input type="text" id="messageInput" placeholder="Type message...">
@@ -254,7 +291,7 @@ function initializeWebSockets() {
                         const video = document.getElementById("remoteVideo");
                         video.srcObject = stream;
                         video.style.display = "block";
-                        floatEmoji("🎤🎥 You are live!");
+                        floatEmoji("🎤🎥 You are live!", false);
                     })
                     .catch(() => alert("Could not access camera/microphone."));
             } else {
@@ -279,13 +316,13 @@ function initializeWebSockets() {
         const data = JSON.parse(event.data);
         if (data.type === "like_update") {
             document.getElementById("likeCount").innerText = data.total_likes;
-            floatEmoji("❤️");
+            floatEmoji("❤️", true);
         } else if (data.type === "gift") {
             const p = document.createElement("p");
             p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
             p.style.color = "orange";
             document.getElementById("chatArea").appendChild(p);
-            floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
+            floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
         } else if (data.type === "live_started") {
             document.getElementById("videoPlaceholder")?.remove();
         }
@@ -367,9 +404,9 @@ function leaveChat() {
     if (likeSocket && likeSocket.readyState === WebSocket.OPEN) likeSocket.close();
 }
 
-function floatEmoji(content) {
+function floatEmoji(content, isHeart = false) {
     const el = document.createElement("div");
-    el.className = "float-emoji";
+    el.className = isHeart ? "float-emoji" : "float-emoji-alt";
     el.innerText = content;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
@@ -404,18 +441,23 @@ window.onload = () => {
     }
 };
 
-// Event listeners
-document.getElementById("likeBtn").onclick = () => {
-    if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
-        likeSocket.send(JSON.stringify({
-            type: "like_update",
-            action: liked ? "unlike" : "like",
-            event_id: eventId
-        }));
-        liked = !liked;
-        document.getElementById("likeBtn").classList.toggle("liked", liked);
-    }
-};
+// Event listeners for reaction buttons
+document.querySelectorAll(".reaction-btn").forEach(btn => {
+    btn.onclick = () => {
+        const emoji = btn.getAttribute("data-emoji");
+        const isHeart = btn.getAttribute("data-is-heart") === "true";
+        if (likeSocket && likeSocket.readyState === WebSocket.OPEN && isHeart) {
+            likeSocket.send(JSON.stringify({
+                type: "like_update",
+                action: liked ? "unlike" : "like",
+                event_id: eventId
+            }));
+            liked = !liked;
+            btn.classList.toggle("liked", liked);
+        }
+        floatEmoji(emoji, isHeart);
+    };
+});
 
 document.getElementById("sendBtn").onclick = () => {
     const msg = document.getElementById("messageInput").value.trim();
