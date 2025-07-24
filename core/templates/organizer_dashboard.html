@@ -194,6 +194,7 @@
                             Toggle to {% if event.livestatus and event.livestatus.is_active %}Inactive{% else %}Active{% endif %}
                         </button>
                     </form>
+                    <p><strong>Type:</strong> {{ event.is_live|yesno:"Live Event,Conversation" }}</p>
                 </div>
             {% empty %}
                 <p>You have not created any events yet.</p>
