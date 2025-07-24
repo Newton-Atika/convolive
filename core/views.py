@@ -319,10 +319,12 @@ def create_conversation(request):
     
     return render(request, 'create_conversation.html', {'form': form})
 
+logger = logging.getLogger(__name__)
+
 @login_required
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
-    
+
     # Check if the event has ended
     try:
         status = LiveStatus.objects.get(event=event)
@@ -333,40 +335,40 @@ def join_event(request, event_id):
     except LiveStatus.DoesNotExist:
         logger.warning(f"No LiveStatus for event {event.id}")
         pass
-    
+
     # Conversations require payment, live events do not
+    has_paid = False
     if not event.is_live:
         has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
         if not has_paid:
             logger.info(f"User {request.user.id} needs payment for conversation {event.id}")
             messages.info(request, "Payment of 50 KES is required to join this conversation.")
             return redirect('pay_event', event_id=event.id)
-    
+
     # Add user as a live participant
     LiveParticipant.objects.get_or_create(event=event, user=request.user)
-    
+
     # Get participant count
     participant_count = LiveParticipant.objects.filter(event=event).count()
-    
+
     # If organizer, list all participants
     participants = []
     if request.user == event.organizer:
         participants = LiveParticipant.objects.filter(event=event).select_related('user')
-    
+
     is_organizer = request.user.is_authenticated and request.user == event.organizer
-    
-    logger.info(f"User {request.user.id} joined {'live event' if event.is_live else 'conversation'} {event.id}")
-    
+
+    logger.info(f"User {request.user.id} joined {'live event' if event.is_live else 'conversation'} {event.id}, has_paid: {has_paid}")
+
     return render(request, 'index.html', {
         'event': event,
-        "has_paid":has_paid,
+        'has_paid': has_paid,  # Consistent with template
         'participants': participants,
         'participant_count': participant_count,
         'is_organizer': 'true' if is_organizer else 'false',
         'organizer_id': event.organizer.pk,
         'mux_playback_id': event.mux_playback_id,
     })
-
 @login_required
 def initiate_paystack_payment(request, event_id):
     event = get_object_or_404(Event, id=event_id)
