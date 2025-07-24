@@ -94,26 +94,48 @@
             display: block;
             animation: fadeIn 0.4s ease-in-out;
         }
+        .event-grid {
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: repeat(2, 1fr); /* 2 cards per row on phones */
+        }
         .event-card {
             border: 1px solid #fff;
-            padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 1.5rem;
+            padding: 0.5rem;
+            border-radius: 8px;
             background-color: #111;
+            font-size: 0.9rem;
+            max-width: 150px; /* Smaller card size */
         }
-        .join-btn {
-            display: inline-block;
-            margin-top: 10px;
-            background: #0f0;
-            color: #000;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            font-weight: bold;
-            text-decoration: none;
+        .event-card h3 {
+            margin: 0 0 0.3rem 0;
+            font-size: 1rem;
+        }
+        .event-card p {
+            margin: 0.2rem 0;
+            font-size: 0.8rem;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+        /* Tablet: 3 cards per row */
+        @media (min-width: 481px) and (max-width: 768px) {
+            .event-grid {
+                grid-template-columns: repeat(3, 1fr); /* 3 cards per row */
+            }
+            .event-card {
+                max-width: 180px;
+            }
+        }
+        /* Laptop: 6 cards per row */
+        @media (min-width: 769px) {
+            .event-grid {
+                grid-template-columns: repeat(6, 1fr); /* 6 cards per row */
+            }
+            .event-card {
+                max-width: 160px;
+            }
         }
         /* Responsive Design */
         @media (max-width: 768px) {
@@ -134,7 +156,10 @@
                 font-size: 1.5rem;
             }
             .event-card h3 {
-                font-size: 1.2rem;
+                font-size: 0.9rem;
+            }
+            .event-card p {
+                font-size: 0.7rem;
             }
         }
     </style>
@@ -169,42 +194,45 @@
         </div>
         <div id="lives" class="tab-content active">
             {% if lives_now %}
-                {% for event in lives_now %}
-                    <div class="event-card">
-                        <h3>{{ event.title }}</h3>
-                        <p>{{ event.description }}</p>
-                        <p><strong>Started at:</strong> {{ event.start_time }}</p>
-                        <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
-                    </div>
-                {% endfor %}
+                <div class="event-grid">
+                    {% for event in lives_now %}
+                        <div class="event-card">
+                            <h3>{{ event.title }}</h3>
+                            <p><strong>By:</strong> {{ event.organizer.username }}</p>
+                            <p><strong>Started:</strong> {{ event.start_time }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
             {% else %}
                 <p>No live events now.</p>
             {% endif %}
         </div>
         <div id="conversations" class="tab-content">
             {% if conversations_now %}
-                {% for event in conversations_now %}
-                    <div class="event-card">
-                        <h3>{{ event.title }}</h3>
-                        <p>{{ event.description }}</p>
-                        <p><strong>Started at:</strong> {{ event.start_time }}</p>
-                        <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
-                    </div>
-                {% endfor %}
+                <div class="event-grid">
+                    {% for event in conversations_now %}
+                        <div class="event-card">
+                            <h3>{{ event.title }}</h3>
+                            <p><strong>By:</strong> {{ event.organizer.username }}</p>
+                            <p><strong>Started:</strong> {{ event.start_time }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
             {% else %}
                 <p>No conversations happening now.</p>
             {% endif %}
         </div>
         <div id="upcoming" class="tab-content">
             {% if upcoming %}
-                {% for event in upcoming %}
-                    <div class="event-card">
-                        <h3>{{ event.title }}</h3>
-                        <p>{{ event.description }}</p>
-                        <p><strong>Starts at:</strong> {{ event.start_time }}</p>
-                        <span style="color: #0f0;">Coming Soon...</span>
-                    </div>
-                {% endfor %}
+                <div class="event-grid">
+                    {% for event in upcoming %}
+                        <div class="event-card">
+                            <h3>{{ event.title }}</h3>
+                            <p><strong>By:</strong> {{ event.organizer.username }}</p>
+                            <p><strong>Starts:</strong> {{ event.start_time }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
             {% else %}
                 <p>No upcoming events in the next hour.</p>
             {% endif %}
