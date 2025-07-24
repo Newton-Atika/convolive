@@ -359,6 +359,7 @@ def join_event(request, event_id):
     
     return render(request, 'index.html', {
         'event': event,
+        "has_paid":has_paid,
         'participants': participants,
         'participant_count': participant_count,
         'is_organizer': 'true' if is_organizer else 'false',
