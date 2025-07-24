@@ -106,7 +106,7 @@
         .event-grid {
             display: grid;
             gap: 0.5rem;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         }
         .event-card {
             border: 1px solid #fff;
@@ -114,7 +114,6 @@
             border-radius: 8px;
             background-color: #111;
             font-size: 0.9rem;
-            max-width: 150px;
         }
         .event-card h3 {
             margin: 0 0 0.3rem 0;
@@ -172,20 +171,8 @@
                 font-size: 0.7rem;
                 padding: 0.2rem 0.5rem;
             }
-        }
-        @media (min-width: 481px) and (max-width: 768px) {
             .event-grid {
-                grid-template-columns: repeat(3, 1fr);
-            keeper: .event-card {
-                max-width: 180px;
-            }
-        }
-        @media (min-width: 769px) {
-            .event-grid {
-                grid-template-columns: repeat(6, 1fr);
-            }
-            .event-card {
-                max-width: 160px;
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         @media (max-width: 768px) {
