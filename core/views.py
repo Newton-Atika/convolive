@@ -166,58 +166,27 @@ def get_agora_token(request):
     except Exception as e:
         logger.exception(f"Failed to generate Agora token: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-@login_required
-def join_event(request, event_id):
-    event = get_object_or_404(Event, id=event_id)
-
-    # Check if the live has ended
-    try:
-        status = LiveStatus.objects.get(event=event)
-        if not status.is_active:
-            return render(request, 'live_has_ended.html', {'event': event})
-    except LiveStatus.DoesNotExist:
-        pass
-
-    # If the event is not live, ensure payment is made
-    if not event.is_live:
-        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
-        if not has_paid:
-            return redirect('pay_event', event_id=event.id)
-
-    # Add the user as a live participant
-    LiveParticipant.objects.get_or_create(event=event, user=request.user)
-
-    # Get participant count
-    participant_count = LiveParticipant.objects.filter(event=event).count()
-
-    # If organizer, list all participants
-    participants = []
-    if request.user == event.organizer:
-        participants = LiveParticipant.objects.filter(event=event).select_related('user')
-    is_organizer = request.user.is_authenticated and request.user == event.organizer
-    return render(request, 'index.html', {
-        'event': event,
-        'participants': participants,
-        'participant_count': participant_count,
-        'is_organizer': 'true' if is_organizer else 'false',
-        'organizer_id': event.organizer.pk,
-        'mux_playback_id': event.mux_playback_id,
-    })
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
 from datetime import timedelta
-from .models import Event, LiveStatus, Gift, Payment
+import uuid
+import requests
+import logging
+from .models import Event, LiveStatus, Gift, Payment, LiveParticipant
 from .forms import EventForm
-from django.db.models import Sum, IntegerField
-from django.db.models.functions import Cast
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
 import mux_python
+from django.conf import settings
 
 # Initialize Mux API client
 mux_api = mux_python.LiveStreamsApi()
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 def landing_page(request):
     now = timezone.now()
@@ -240,14 +209,8 @@ def organizer_dashboard(request):
     
     my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
     
-    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
-        amount_int=Cast('amount', IntegerField())
-    ).aggregate(total=Sum('amount_int'))['total'] or 0
-    
-    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-    
+    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).aggregate(total=Sum('amount'))['total'] or 0
+    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(total=Sum('amount'))['total'] or 0
     total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
     
     return render(request, 'organizer_dashboard.html', {
@@ -300,14 +263,18 @@ def create_event(request):
             
             # Create Mux Live Stream for live events
             if event.is_live:
-                mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
-                    playback_policy=["public"],
-                    new_asset_settings={"playback_policy": ["public"]},
-                    test=False
-                ))
-                event.mux_stream_key = mux_stream.data.stream_key
-                event.mux_playback_id = mux_stream.data.playback_ids[0].id
-                event.save()
+                try:
+                    mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
+                        playback_policy=["public"],
+                        new_asset_settings={"playback_policy": ["public"]},
+                        test=False
+                    ))
+                    event.mux_stream_key = mux_stream.data.stream_key
+                    event.mux_playback_id = mux_stream.data.playback_ids[0].id
+                    event.save()
+                except Exception as e:
+                    logger.error(f"Mux stream creation failed for event {event.id}: {str(e)}")
+                    messages.error(request, "Failed to create live stream. Event created without streaming.")
             
             messages.success(request, f"{'Live event' if event.is_live else 'Conversation'} '{event.title}' created successfully.")
             return redirect('event_detail', event_id=event.id)
@@ -345,6 +312,145 @@ def create_conversation(request):
         form = EventForm(initial={'is_live': False})
     
     return render(request, 'create_conversation.html', {'form': form})
+
+@login_required
+def join_event(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
+    
+    # Check if the event has ended
+    try:
+        status = LiveStatus.objects.get(event=event)
+        if not status.is_active:
+            logger.info(f"User {request.user.id} attempted to join inactive event {event.id}")
+            messages.error(request, f"The {'live event' if event.is_live else 'conversation'} has ended.")
+            return render(request, 'live_has_ended.html', {'event': event})
+    except LiveStatus.DoesNotExist:
+        logger.warning(f"No LiveStatus for event {event.id}")
+        pass
+    
+    # Conversations require payment, live events do not
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            logger.info(f"User {request.user.id} needs payment for conversation {event.id}")
+            messages.info(request, "Payment of 50 KES is required to join this conversation.")
+            return redirect('pay_event', event_id=event.id)
+    
+    # Add user as a live participant
+    LiveParticipant.objects.get_or_create(event=event, user=request.user)
+    
+    # Get participant count
+    participant_count = LiveParticipant.objects.filter(event=event).count()
+    
+    # If organizer, list all participants
+    participants = []
+    if request.user == event.organizer:
+        participants = LiveParticipant.objects.filter(event=event).select_related('user')
+    
+    is_organizer = request.user.is_authenticated and request.user == event.organizer
+    
+    logger.info(f"User {request.user.id} joined {'live event' if event.is_live else 'conversation'} {event.id}")
+    
+    return render(request, 'index.html', {
+        'event': event,
+        'participants': participants,
+        'participant_count': participant_count,
+        'is_organizer': 'true' if is_organizer else 'false',
+        'organizer_id': event.organizer.pk,
+        'mux_playback_id': event.mux_playback_id,
+    })
+
+@login_required
+def initiate_paystack_payment(request, event_id):
+    event = get_object_or_404(Event, id=event_id)
+    
+    # Live events don't require payment
+    if event.is_live:
+        logger.info(f"User {request.user.id} joining live event {event.id} without payment")
+        return redirect('join_event', event_id=event.id)
+    
+    # Check if already paid
+    if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
+        logger.info(f"User {request.user.id} already paid for conversation {event.id}")
+        return redirect('join_event', event_id=event.id)
+    
+    # Create unique reference
+    reference = str(uuid.uuid4())
+    
+    # Create Payment record with verified=False
+    payment = Payment.objects.create(
+        user=request.user,
+        event=event,
+        reference=reference,
+        amount=50  # Fixed price in KES
+    )
+    
+    callback_url = request.build_absolute_uri(reverse('verify_payment')) + f"?ref={reference}"
+    
+    headers = {
+        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    data = {
+        "email": request.user.email,
+        "amount": int(payment.amount * 100),  # Convert to kobo
+        "reference": reference,
+        "callback_url": callback_url,
+    }
+    
+    try:
+        response = requests.post('https://api.paystack.co/transaction/initialize', json=data, headers=headers)
+        response.raise_for_status()  # Raise exception for bad status codes
+        response_data = response.json()
+        
+        if response_data.get('status') and 'data' in response_data and 'authorization_url' in response_data['data']:
+            logger.info(f"Payment initiated for user {request.user.id}, conversation {event.id}, reference {reference}")
+            return redirect(response_data['data']['authorization_url'])
+        else:
+            logger.error(f"Paystack initialization failed for reference {reference}: {response_data}")
+            payment.delete()  # Clean up failed payment record
+            messages.error(request, "Failed to initiate payment. Please try again.")
+            return redirect('event_detail', event_id=event.id)
+    except requests.RequestException as e:
+        logger.error(f"Paystack API error for reference {reference}: {str(e)}")
+        payment.delete()  # Clean up failed payment record
+        messages.error(request, "Payment service unavailable. Please try again later.")
+        return redirect('event_detail', event_id=event.id)
+
+@csrf_exempt
+def verify_payment(request):
+    reference = request.GET.get('ref')
+    if not reference:
+        logger.error("No reference provided in verify_payment")
+        return HttpResponse("Invalid payment reference", status=400)
+    
+    payment = get_object_or_404(Payment, reference=reference)
+    
+    headers = {
+        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+    }
+    
+    try:
+        url = f"https://api.paystack.co/transaction/verify/{reference}"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise exception for bad status codes
+        res_data = response.json()
+        
+        if res_data.get('status') and res_data.get('data', {}).get('status') == 'success':
+            payment.verified = True
+            payment.save()
+            logger.info(f"Payment verified for user {payment.user.id}, conversation {payment.event.id}, reference {reference}")
+            messages.success(request, "Payment verified successfully. You can now join the conversation.")
+            return redirect('join_event', event_id=payment.event.id)
+        else:
+            logger.error(f"Payment verification failed for reference {reference}: {res_data}")
+            messages.error(request, "Payment verification failed. Please contact support.")
+            return redirect('event_detail', event_id=payment.event.id)
+    except requests.RequestException as e:
+        logger.error(f"Paystack verification error for reference {reference}: {str(e)}")
+        messages.error(request, "Error verifying payment. Please try again or contact support.")
+        return redirect('event_detail', event_id=payment.event.id)
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
@@ -434,74 +540,6 @@ def verify_gift_payment(request):
             event = Event.objects.filter(id=event_id).first()
         return render(request, "payment_error.html", {"error": str(e), "event": event})
 # views.py
-
-import uuid
-import requests
-from django.conf import settings
-from django.shortcuts import redirect
-
-def initiate_paystack_payment(request, event_id):
-    event = get_object_or_404(Event, id=event_id)
-
-    # Check if already paid
-    if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
-        return redirect('join_event', event_id=event.id)
-
-    # Create unique reference
-    reference = str(uuid.uuid4())
-
-    # Create Payment record with verified=False
-    payment = Payment.objects.create(
-        user=request.user,
-        event=event,
-        reference=reference,
-        amount=50  # Fixed price
-    )
-
-    callback_url = request.build_absolute_uri(reverse('verify_payment')) + f"?ref={reference}"
-
-    headers = {
-        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    data = {
-        "email": request.user.email,
-        "amount": int(payment.amount * 100),  # Convert to kobo
-        "reference": reference,
-        "callback_url": callback_url,
-    }
-
-    response = requests.post('https://api.paystack.co/transaction/initialize', json=data, headers=headers)
-    response_data = response.json()
-
-    if response.status_code == 200 and response_data['status']:
-        return redirect(response_data['data']['authorization_url'])
-    else:
-        return HttpResponse("Error initiating payment", status=400)
-from django.views.decorators.csrf import csrf_exempt
-
-@csrf_exempt
-def verify_payment(request):
-    reference = request.GET.get('ref')
-    payment = get_object_or_404(Payment, reference=reference)
-
-    headers = {
-        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-    }
-
-    url = f"https://api.paystack.co/transaction/verify/{reference}"
-    response = requests.get(url, headers=headers)
-    res_data = response.json()
-
-    if res_data['status'] and res_data['data']['status'] == 'success':
-        payment.verified = True
-        payment.save()
-        return redirect('join_event', event_id=payment.event.id)
-
-    return HttpResponse("Payment not successful", status=400)
-
-
 from django.db.models.functions import Cast
 from django.db.models import Sum, IntegerField
 from .models import Event, Gift, Payment
