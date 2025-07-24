@@ -283,36 +283,41 @@ async function initAgora() {
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
         console.log(`Joined channel ${CHANNEL} as uid ${uid}`);
 
-        if (isOrganizer) {
-            await rtc.client.setClientRole("host");
-            console.log("Set client role to host");
-            try {
-                rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-                console.log("Created local audio and video tracks");
-                const localVideo = document.getElementById("localVideo");
-                if (localVideo) {
-                    rtc.localVideoTrack.play(localVideo);
-                    localVideo.style.display = "block";
-                    console.log("Playing local video");
-                } else {
-                    console.error("localVideo element not found");
-                }
-                await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-                console.log("Published local audio and video tracks");
-            } catch (err) {
-                console.error("Failed to publish tracks:", err);
-                alert(`Failed to publish video: ${err.message}`);
-            }
+if (isOrganizer) {
+    await rtc.client.setClientRole("host");
+    console.log("Set client role to host");
+    try {
+        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+        console.log("Created local audio and video tracks");
+
+        const localVideo = document.getElementById("localVideo");
+        if (localVideo) {
+            rtc.localVideoTrack.play(localVideo);
+            localVideo.style.display = "block";
+            console.log("Playing local video");
         } else {
-            await rtc.client.setClientRole("audience");
-            console.log("Set client role to audience");
+            console.error("localVideo element not found");
         }
+
+        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+        console.log("Published local audio and video tracks");
+
+        // ✅ Only now send the WebSocket message
+        if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
+            streamSocket.send(JSON.stringify({ type: "live_started" }));
+            console.log("✅ Sent live_started after publishing");
+        }
+
     } catch (err) {
-        console.error("Agora initialization error:", err);
-        alert(`Failed to initialize Agora: ${err.message}. Check console for details.`);
+        console.error("Failed to publish tracks:", err);
+        alert(`Failed to publish video: ${err.message}`);
     }
+} else {
+    await rtc.client.setClientRole("audience");
+    console.log("Set client role to audience");
 }
+
 
 async function joinChannel(token, uid) {
     try {
