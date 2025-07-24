@@ -150,8 +150,7 @@ const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = {{ is_organizer|safe }};
 const eventIsLive = {{ event.is_live|lower|safe }};
-
-const socket = new WebSocket(`wss://${window.location.host}/ws/stream/${CHANNEL}/`);
+let socket;  
 
 socket.onopen = () => {
     console.log('WebSocket connected');
