@@ -424,25 +424,29 @@ def initiate_paystack_payment(request, event_id):
         messages.error(request, "Payment service unavailable. Please try again later.")
         return redirect('event_detail', event_id=event.id)
 
-@csrf_exempt
+from django.shortcuts import redirect, get_object_or_404
+from django.contrib import messages
+from django.conf import settings
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
+
 def verify_payment(request):
     reference = request.GET.get('ref')
     if not reference:
         logger.error("No reference provided in verify_payment")
         return HttpResponse("Invalid payment reference", status=400)
-    
+
     payment = get_object_or_404(Payment, reference=reference)
-    
-    headers = {
-        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-    }
-    
+    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+
     try:
         url = f"https://api.paystack.co/transaction/verify/{reference}"
         response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise exception for bad status codes
+        response.raise_for_status()
         res_data = response.json()
-        
+
         if res_data.get('status') and res_data.get('data', {}).get('status') == 'success':
             payment.verified = True
             payment.save()
@@ -453,6 +457,7 @@ def verify_payment(request):
             logger.error(f"Payment verification failed for reference {reference}: {res_data}")
             messages.error(request, "Payment verification failed. Please contact support.")
             return redirect('event_detail', event_id=payment.event.id)
+
     except requests.RequestException as e:
         logger.error(f"Paystack verification error for reference {reference}: {str(e)}")
         messages.error(request, "Error verifying payment. Please try again or contact support.")
