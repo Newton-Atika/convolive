@@ -169,7 +169,6 @@ const rtc = {
     localAudioTrack: null,
     localVideoTrack: null
 };
-let socket; 
 async function initAgora() {
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
