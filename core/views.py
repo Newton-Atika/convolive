@@ -407,30 +407,6 @@ def verify_payment(request):
 from django.db.models.functions import Cast
 from django.db.models import Sum, IntegerField
 from .models import Event, Gift, Payment
-@login_required
-def organizer_dashboard(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
-        return render(request, 'not_authorized.html')
-
-    my_events = Event.objects.filter(organizer=request.user).order_by('-start_time')
-
-    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
-        amount_int=Cast('amount', IntegerField())
-    ).aggregate(total=Sum('amount_int'))['total'] or 0
-
-    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
-    total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
-
-    return render(request, 'organizer_dashboard.html', {
-        'my_events': my_events,
-        'total_gift_revenue': total_gift_revenue,
-        'total_join_revenue': total_join_revenue,
-        'total_revenue': total_revenue,
-    })
-
 
 @user_passes_test(lambda u: u.is_superuser)
 def manage_organizers(request):
@@ -446,24 +422,71 @@ def manage_organizers(request):
     return render(request, 'manage_organizers.html', {'users': users})
 
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.utils import timezone
+from django.contrib import messages
 from datetime import timedelta
-from .models import Event
+from .models import Event, LiveStatus, Gift, Payment
+from django.db.models import Sum, IntegerField
+from django.db.models.functions import Cast
+from django.contrib.auth.decorators import login_required
 
 def landing_page(request):
     now = timezone.now()
     next_hour = now + timedelta(hours=1)
     
-    lives_now = Event.objects.filter(is_live=True, start_time__lte=now).select_related('organizer')
-    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now).select_related('organizer')
-    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour).select_related('organizer')
+    lives_now = Event.objects.filter(is_live=True, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
+    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
+    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour, livestatus__is_active=True).select_related('organizer')
     
     return render(request, 'landing.html', {
         'lives_now': lives_now,
         'conversations_now': conversations_now,
         'upcoming': upcoming,
     })
+
+@login_required
+def organizer_dashboard(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
+    my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
+    
+    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
+        amount_int=Cast('amount', IntegerField())
+    ).aggregate(total=Sum('amount_int'))['total'] or 0
+    
+    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
+    
+    return render(request, 'organizer_dashboard.html', {
+        'my_events': my_events,
+        'total_gift_revenue': total_gift_revenue,
+        'total_join_revenue': total_join_revenue,
+        'total_revenue': total_revenue,
+    })
+
+@login_required
+def toggle_event_status(request, event_id):
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
+    event = Event.objects.filter(id=event_id, organizer=request.user).first()
+    if not event:
+        messages.error(request, "Event not found or you are not the organizer.")
+        return redirect('organizer_dashboard')
+    
+    live_status, created = LiveStatus.objects.get_or_create(event=event, defaults={'is_active': True})
+    if request.method == 'POST':
+        live_status.is_active = not live_status.is_active
+        live_status.save()
+        status = "active" if live_status.is_active else "inactive"
+        messages.success(request, f"Event '{event.title}' is now {status}.")
+    
+    return redirect('organizer_dashboard')
 
 
 def signup_view(request):
