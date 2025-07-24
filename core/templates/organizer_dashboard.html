@@ -21,23 +21,19 @@
             border-bottom: 2px solid #fff;
             flex-wrap: wrap;
         }
-
         .navbar h1 {
             font-size: 1.5rem;
             margin: 0;
         }
-
         .content {
             padding: 2rem;
         }
-
         .actions {
             display: flex;
             gap: 1.5rem;
             margin-bottom: 2rem;
             flex-wrap: wrap;
         }
-
         .action-card {
             flex: 1 1 200px;
             background-color: #111;
@@ -48,24 +44,20 @@
             cursor: pointer;
             transition: transform 0.2s ease;
         }
-
         .action-card:hover {
             transform: scale(1.03);
             background-color: #222;
         }
-
         .action-card h2 {
             margin: 0;
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
         }
-
         .stats {
             display: flex;
             flex-wrap: wrap;
             gap: 1.5rem;
         }
-
         .stat-box {
             flex: 1 1 180px;
             background-color: #111;
@@ -74,38 +66,54 @@
             border-radius: 10px;
             text-align: center;
         }
-
         .stat-box h3 {
             margin: 0 0 0.5rem;
             font-size: 1rem;
             color: #999;
         }
-
         .stat-box p {
             margin: 0;
             font-size: 1.8rem;
             font-weight: bold;
         }
-
+        .toggle-form {
+            margin-top: 0.5rem;
+        }
+        .toggle-btn {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .toggle-btn.inactive {
+            background: #f00;
+        }
+        .toggle-btn:hover {
+            background: #0c0;
+        }
+        .toggle-btn.inactive:hover {
+            background: #c00;
+        }
         @media (max-width: 600px) {
             .navbar {
                 flex-direction: column;
                 gap: 1rem;
                 text-align: center;
             }
-
             .action-card, .stat-box {
                 flex: 1 1 100%;
             }
-
             .content {
                 padding: 1rem;
             }
-
             .action-card {
                 padding: 1.5rem;
             }
-
             .stat-box {
                 padding: 1rem;
             }
@@ -119,21 +127,21 @@
             <a href="{% url 'landing' %}" style="color: #0f0; text-decoration: underline;">Home</a>
         </div>
     </div>
-
     <div class="content">
-        <a href="{% url 'create_event' %}" style="text-decoration: none;">
-            <div class="action-card">
-                <h2>🎥 Create a Live</h2>
-                <p>Host your next live event</p>
-            </div>
-        </a>
-        <a href="{% url 'create_conversation' %}" style="text-decoration: none;">
-            <div class="action-card">
-                <h2>💬 Create a Conversation</h2>
-                <p>Start an interactive talk</p>
-            </div>
-        </a>
-
+        <div class="actions">
+            <a href="{% url 'create_event' %}" style="text-decoration: none;">
+                <div class="action-card">
+                    <h2>🎥 Create a Live</h2>
+                    <p>Host your next live event</p>
+                </div>
+            </a>
+            <a href="{% url 'create_conversation' %}" style="text-decoration: none;">
+                <div class="action-card">
+                    <h2>💬 Create a Conversation</h2>
+                    <p>Start an interactive talk</p>
+                </div>
+            </a>
+        </div>
         <div class="stats">
             <div class="stat-box">
                 <h3>Total Events</h3>
@@ -148,7 +156,6 @@
                 <p>{{ total_join_revenue }} KES</p>
             </div>
         </div>
-
         <h2 style="margin-top: 2rem;">📊 Revenue Per Event</h2>
         <div class="stats">
             {% for event in my_events %}
@@ -157,6 +164,13 @@
                     <p><strong>Gifts:</strong> {{ event.get_gift_revenue }} KES</p>
                     <p><strong>Joins:</strong> {{ event.get_join_revenue }} KES</p>
                     <p><strong>Total:</strong> {{ event.get_total_revenue }} KES</p>
+                    <p><strong>Status:</strong> {% if event.livestatus %}{{ event.livestatus.is_active|yesno:"Active,Inactive" }}{% else %}No Status{% endif %}</p>
+                    <form method="post" action="{% url 'toggle_event_status' event.id %}" class="toggle-form">
+                        {% csrf_token %}
+                        <button type="submit" class="toggle-btn {% if event.livestatus and not event.livestatus.is_active %}inactive{% endif %}">
+                            Toggle to {% if event.livestatus and event.livestatus.is_active %}Inactive{% else %}Active{% endif %}
+                        </button>
+                    </form>
                 </div>
             {% empty %}
                 <p>You have not created any events yet.</p>
