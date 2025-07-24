@@ -127,9 +127,46 @@
             text-decoration: none;
             text-align: center;
         }
+        hr.divider {
+            border: none;
+            border-top: 1px solid #fff;
+            margin: 1rem 0;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+        /* Phone: Combine Lives Now and Conversations tabs */
+        @media (max-width: 480px) {
+            .tabs {
+                flex-wrap: nowrap;
+                justify-content: space-between;
+            }
+            .tab-btn {
+                flex: 1 1 auto;
+                max-width: 120px; /* Smaller buttons to fit both on one line */
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
+            }
+            .tab-btn:last-child {
+                display: block;
+                margin-top: 0.5rem;
+                width: 100%;
+                max-width: none;
+            }
+            .welcome-section h1 {
+                font-size: 1.5rem;
+            }
+            .event-card h3 {
+                font-size: 0.9rem;
+            }
+            .event-card p {
+                font-size: 0.7rem;
+            }
+            .join-btn {
+                font-size: 0.7rem;
+                padding: 0.2rem 0.5rem;
+            }
         }
         /* Tablet: 3 cards per row */
         @media (min-width: 481px) and (max-width: 768px) {
@@ -161,21 +198,6 @@
             .tab-btn {
                 flex: 1 1 100%;
                 max-width: 100%;
-            }
-        }
-        @media (max-width: 480px) {
-            .welcome-section h1 {
-                font-size: 1.5rem;
-            }
-            .event-card h3 {
-                font-size: 0.9rem;
-            }
-            .event-card p {
-                font-size: 0.7rem;
-            }
-            .join-btn {
-                font-size: 0.7rem;
-                padding: 0.2rem 0.5rem;
             }
         }
     </style>
@@ -240,6 +262,7 @@
                 <p>No conversations happening now.</p>
             {% endif %}
         </div>
+        <hr class="divider">
         <div id="upcoming" class="tab-content">
             {% if upcoming %}
                 <div class="event-grid">
