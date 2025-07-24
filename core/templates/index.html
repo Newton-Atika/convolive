@@ -283,41 +283,45 @@ async function initAgora() {
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
         console.log(`Joined channel ${CHANNEL} as uid ${uid}`);
 
-if (isOrganizer) {
-    await rtc.client.setClientRole("host");
-    console.log("Set client role to host");
-    try {
-        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-        console.log("Created local audio and video tracks");
+        if (isOrganizer) {
+            await rtc.client.setClientRole("host");
+            console.log("Set client role to host");
+            try {
+                rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                console.log("Created local audio and video tracks");
 
-        const localVideo = document.getElementById("localVideo");
-        if (localVideo) {
-            rtc.localVideoTrack.play(localVideo);
-            localVideo.style.display = "block";
-            console.log("Playing local video");
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    rtc.localVideoTrack.play(localVideo);
+                    localVideo.style.display = "block";
+                    console.log("Playing local video");
+                } else {
+                    console.error("localVideo element not found");
+                }
+
+                await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+                console.log("Published local audio and video tracks");
+
+                // ✅ Only now send the WebSocket message
+                if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
+                    streamSocket.send(JSON.stringify({ type: "live_started" }));
+                    console.log("✅ Sent live_started after publishing");
+                }
+
+            } catch (err) {
+                console.error("Failed to publish tracks:", err);
+                alert(`Failed to publish video: ${err.message}`);
+            }
         } else {
-            console.error("localVideo element not found");
+            await rtc.client.setClientRole("audience");
+            console.log("Set client role to audience");
         }
-
-        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-        console.log("Published local audio and video tracks");
-
-        // ✅ Only now send the WebSocket message
-        if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
-            streamSocket.send(JSON.stringify({ type: "live_started" }));
-            console.log("✅ Sent live_started after publishing");
-        }
-
     } catch (err) {
-        console.error("Failed to publish tracks:", err);
-        alert(`Failed to publish video: ${err.message}`);
+        console.error("initAgora error:", err);
+        alert(`Failed to initialize Agora: ${err.message}`);
     }
-} else {
-    await rtc.client.setClientRole("audience");
-    console.log("Set client role to audience");
 }
-
 
 async function joinChannel(token, uid) {
     try {
@@ -409,147 +413,150 @@ window.onload = () => {
         console.log("Event is not live and user has not paid. Waiting for payment.");
     }
 };
-  // WebSocket and other logic
-  const wsScheme = location.protocol === "https:" ? "wss" : "ws";
-  const user = "{{ request.user.username|escapejs }}";
-  const eventId = "{{ event.id|escapejs }}";
 
-  const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
-  const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
+// WebSocket and other logic
+const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+const user = "{{ request.user.username|escapejs }}";
+const eventId = "{{ event.id|escapejs }}";
 
-  let liked = false;
-  let localMicStream = null;
-  const peerConnections = {};
-  const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-  let streamReady = false, pendingOffers = {};
+const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
+const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
 
-  function floatEmoji(content) {
+let liked = false;
+let localMicStream = null;
+const peerConnections = {};
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+let streamReady = false, pendingOffers = {};
+
+function floatEmoji(content) {
     const el = document.createElement("div");
     el.className = "float-emoji";
     el.innerText = content;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
-  }
+}
 
-  function giftLabel(value) {
+function giftLabel(value) {
     switch (value) {
-      case "10": return "🌹 Coin x10";
-      case "20": return "🍫 Coin x20";
-      case "50": return "⭐ Coin x50";
-      default: return `🎁 Coin x${value}`;
+        case "10": return "🌹 Coin x10";
+        case "20": return "🍫 Coin x20";
+        case "50": return "⭐ Coin x50";
+        default: return `🎁 Coin x${value}`;
     }
-  }
-  // CHAT SOCKET
-  chatSocket.onmessage = (event) => {
+}
+
+// CHAT SOCKET
+chatSocket.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (data.type === "chat") {
-      const p = document.createElement("p");
-      p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-      const chatArea = document.getElementById("chatArea");
-      chatArea.appendChild(p);
-      chatArea.scrollTop = chatArea.scrollHeight;
+        const p = document.createElement("p");
+        p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+        const chatArea = document.getElementById("chatArea");
+        chatArea.appendChild(p);
+        chatArea.scrollTop = chatArea.scrollHeight;
     } else if (data.type === "mic_request" && isOrganizer) {
-      const li = document.createElement("li");
-      li.id = `mic-${data.username}`;
-      li.innerHTML = `${data.username} requests mic 
-        <button onclick="approveMic('${data.username}')">✅</button>
-        <button onclick="denyMic('${data.username}')">❌</button>`;
-      document.getElementById("requestList").appendChild(li);
+        const li = document.createElement("li");
+        li.id = `mic-${data.username}`;
+        li.innerHTML = `${data.username} requests mic 
+            <button onclick="approveMic('${data.username}')">✅</button>
+            <button onclick="denyMic('${data.username}')">❌</button>`;
+        document.getElementById("requestList").appendChild(li);
     } else if (data.type === "mic_approved") {
-      if (!isOrganizer && data.username === user) {
-        navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-          .then(stream => {
-            localMicStream = stream;
-            const video = document.getElementById("remoteVideo");
-            video.srcObject = stream;
-            video.style.display = "block";
-            floatEmoji("🎤🎥 You are live!");
-          })
-          .catch(() => alert("Could not access camera/microphone."));
-      } else {
-        document.getElementById(`mic-${data.username}`)?.remove();
-      }
+        if (!isOrganizer && data.username === user) {
+            navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+                .then(stream => {
+                    localMicStream = stream;
+                    const video = document.getElementById("remoteVideo");
+                    video.srcObject = stream;
+                    video.style.display = "block";
+                    floatEmoji("🎤🎥 You are live!");
+                })
+                .catch(() => alert("Could not access camera/microphone."));
+        } else {
+            document.getElementById(`mic-${data.username}`)?.remove();
+        }
     } else if (data.type === "mic_denied") {
-      if (data.username === user) {
-        alert("❌ Your mic request was denied.");
-      } else {
-        document.getElementById(`mic-${data.username}`)?.remove();
-      }
+        if (data.username === user) {
+            alert("❌ Your mic request was denied.");
+        } else {
+            document.getElementById(`mic-${data.username}`)?.remove();
+        }
     } else if (data.type === "mic_revoked" && data.username === user) {
-      if (localMicStream) {
-        localMicStream.getTracks().forEach(t => t.stop());
-      }
-      localMicStream = null;
-      const video = document.getElementById("remoteVideo");
-      video.srcObject = null;
-      video.style.display = "none";
-      alert("🔇 Your mic/video access was revoked.");
+        if (localMicStream) {
+            localMicStream.getTracks().forEach(t => t.stop());
+        }
+        localMicStream = null;
+        const video = document.getElementById("remoteVideo");
+        video.srcObject = null;
+        video.style.display = "none";
+        alert("🔇 Your mic/video access was revoked.");
     }
-  };
+};
 
-  // LIKE SOCKET
-  likeSocket.onmessage = (event) => {
+// LIKE SOCKET
+likeSocket.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (data.type === "like_update") {
-      document.getElementById("likeCount").innerText = data.total_likes;
-      floatEmoji("❤️");
+        document.getElementById("likeCount").innerText = data.total_likes;
+        floatEmoji("❤️");
     } else if (data.type === "gift") {
-      const p = document.createElement("p");
-      p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
-      p.style.color = "orange";
-      document.getElementById("chatArea").appendChild(p);
-      floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
+        const p = document.createElement("p");
+        p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
+        p.style.color = "orange";
+        document.getElementById("chatArea").appendChild(p);
+        floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
     } else if (data.type === "live_started") {
-      document.getElementById("videoPlaceholder")?.remove();
+        document.getElementById("videoPlaceholder")?.remove();
     }
-  };
+};
 
-  document.getElementById("sendBtn").onclick = () => {
+document.getElementById("sendBtn").onclick = () => {
     const msg = document.getElementById("messageInput").value.trim();
     if (msg && chatSocket.readyState === WebSocket.OPEN) {
-      chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-      document.getElementById("messageInput").value = "";
+        chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+        document.getElementById("messageInput").value = "";
     }
-  };
+};
 
-  document.getElementById("messageInput").addEventListener("keypress", (e) => {
+document.getElementById("messageInput").addEventListener("keypress", (e) => {
     if (e.key === "Enter") document.getElementById("sendBtn").click();
-  });
+});
 
-  document.getElementById("likeBtn").onclick = () => {
+document.getElementById("likeBtn").onclick = () => {
     if (likeSocket.readyState === WebSocket.OPEN) {
-      likeSocket.send(JSON.stringify({
-        action: liked ? "unlike" : "like",
-        event_id: eventId
-      }));
-      liked = !liked;
-      document.getElementById("likeBtn").classList.toggle("liked", liked);
+        likeSocket.send(JSON.stringify({
+            action: liked ? "unlike" : "like",
+            event_id: eventId
+        }));
+        liked = !liked;
+        document.getElementById("likeBtn").classList.toggle("liked", liked);
     }
-  };
+};
 
-  function approveMic(username) {
+function approveMic(username) {
     chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
-  }
-  function denyMic(username) {
+}
+function denyMic(username) {
     chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
-  }
-  function revokeMic(username) {
+}
+function revokeMic(username) {
     chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
-  }
+}
 
-  document.getElementById("leaveChatBtn").onclick = () => {
-    leaveChannel();
+document.getElementById("leaveChatBtn").onclick = () => {
+    leaveChat();
     window.location.href = "{% url 'landing' %}";
-  };
+};
 
-  const micBtn = document.getElementById("requestMicBtn");
-  if (micBtn) {
+const micBtn = document.getElementById("requestMicBtn");
+if (micBtn) {
     micBtn.onclick = () => {
-      chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-      micBtn.disabled = true;
+        chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+        alert("🎤 Mic request sent to organizer.");
     };
-  }
+}
 </script>
+
 
 </body>
 </html>
