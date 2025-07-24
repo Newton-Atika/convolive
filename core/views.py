@@ -172,7 +172,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from datetime import timedelta
 from .models import Event, LiveStatus, Gift, Payment, Conversation
-from .forms import EventForm, ConversationForm
+from .forms import EventForm
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Cast
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
