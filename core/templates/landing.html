@@ -65,12 +65,21 @@
         .container {
             padding: 2rem 1rem;
         }
+        .tabs-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+            scrollbar-width: none; /* Hide scrollbar in Firefox */
+            -ms-overflow-style: none; /* Hide scrollbar in IE/Edge */
+        }
+        .tabs-container::-webkit-scrollbar {
+            display: none; /* Hide scrollbar in Chrome/Safari */
+        }
         .tabs {
             display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
+            flex-wrap: nowrap;
             gap: 0.5rem;
             margin-bottom: 2rem;
+            white-space: nowrap;
         }
         .tab-btn {
             background-color: #000;
@@ -79,7 +88,7 @@
             padding: 0.6rem 1.2rem;
             border-radius: 8px;
             cursor: pointer;
-            flex: 1 1 30%;
+            flex: 1 1 auto;
             max-width: 200px;
         }
         .tab-btn.active {
@@ -136,23 +145,20 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        /* Phone: Combine Lives Now and Conversations tabs */
+        /* Phone: Smaller tabs with slider */
         @media (max-width: 480px) {
+            .tabs-container {
+                padding-bottom: 0.5rem; /* Space for scrolling */
+            }
             .tabs {
                 flex-wrap: nowrap;
-                justify-content: space-between;
+                justify-content: flex-start;
             }
             .tab-btn {
-                flex: 1 1 auto;
-                max-width: 120px; /* Smaller buttons to fit both on one line */
-                padding: 0.4rem 0.8rem;
-                font-size: 0.9rem;
-            }
-            .tab-btn:last-child {
-                display: block;
-                margin-top: 0.5rem;
-                width: 100%;
-                max-width: none;
+                flex: 0 0 auto;
+                max-width: 100px; /* Smaller buttons */
+                padding: 0.3rem 0.6rem;
+                font-size: 0.8rem;
             }
             .welcome-section h1 {
                 font-size: 1.5rem;
@@ -225,10 +231,12 @@
         <p>Join live sessions, engaging conversations, or catch up on upcoming events!</p>
     </header>
     <div class="container">
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives Now</button>
-            <button class="tab-btn" onclick="openTab(event, 'conversations')">💬 Conversations</button>
-            <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives Now</button>
+                <button class="tab-btn" onclick="openTab(event, 'conversations')">💬 Conversations</button>
+                <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
+            </div>
         </div>
         <div id="lives" class="tab-content active">
             {% if lives_now %}
