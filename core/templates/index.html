@@ -258,12 +258,11 @@ function leaveChat() {
 }
 
 window.onload = () => {
-    if (eventIsLive) {
-        initializeWebSocket();
-        if (isOrganizer) {
-            initAgora();
-        }
-    }
+    initializeWebSocket();
+      if (isOrganizer) {
+          initAgora();
+      }
+      
 };
 
 let liked = false;
