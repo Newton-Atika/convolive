@@ -510,7 +510,7 @@ document.getElementById("leaveChatBtn").onclick = () => {
     window.location.href = "{% url 'landing' %}";
 };
 
-const micBtn = document.getElementById("requestMicBtn");
+
 if (micBtn) {
     micBtn.onclick = () => {
         chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
