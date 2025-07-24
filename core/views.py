@@ -176,6 +176,8 @@ from datetime import timedelta
 import uuid
 import requests
 import logging
+from django.db.models import Sum, IntegerField
+from django.db.models.functions import Cast
 from .models import Event, LiveStatus, Gift, Payment, LiveParticipant
 from .forms import EventForm
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
@@ -209,7 +211,11 @@ def organizer_dashboard(request):
     
     my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
     
-    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).aggregate(total=Sum('amount'))['total'] or 0
+    # Cast Gift.amount to IntegerField for summation
+    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
+        amount_int=Cast('amount', IntegerField())
+    ).aggregate(total=Sum('amount_int'))['total'] or 0
+    
     total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(total=Sum('amount'))['total'] or 0
     total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
     
