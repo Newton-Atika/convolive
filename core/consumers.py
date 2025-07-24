@@ -36,7 +36,6 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
                         "total_likes": total_likes
                     }
                 )
-
         elif "gift" in data and user.is_authenticated:
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -46,7 +45,14 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
                     "gift": data["gift"]
                 }
             )
-
+        elif data.get("type") == "reaction":
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "send_reaction",
+                    "emoji": data["emoji"]
+                }
+            )
         elif data.get("live_started") is True:
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -68,11 +74,16 @@ class EventLikeConsumer(AsyncWebsocketConsumer):
             "gift": event["gift"]
         }))
 
+    async def send_reaction(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "reaction",
+            "emoji": event["emoji"]
+        }))
+
     async def live_started(self, event):
         await self.send(text_data=json.dumps({
             "type": "live_started"
         }))
-
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
