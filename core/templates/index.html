@@ -150,126 +150,17 @@ const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = {{ is_organizer|safe }};
 const eventIsLive = {{ event.is_live|lower|safe }};
-let socket;  
+const user = "{{ request.user.username|escapejs }}";
+const eventId = "{{ event.id|escapejs }}";
+const wsScheme = location.protocol === "https:" ? "wss" : "ws";
 
-socket.onopen = () => {
-    console.log('WebSocket connected');
-};
-
-socket.onerror = (error) => {
-    console.error('WebSocket error:', error);
-};
-
-socket.onclose = (event) => {
-    console.log('WebSocket closed:', event);
-};
+let socket; // <-- declared once globally
 
 const rtc = {
     client: null,
     localAudioTrack: null,
     localVideoTrack: null
 };
-async function initAgora() {
-    try {
-        const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Organizer failed to fetch token: ${errorText}`);
-            throw new Error(`Organizer failed to fetch token: ${errorText}`);
-        }
-
-        const { token, uid, role } = await response.json();
-        console.log(`Organizer fetched token: ${token}, uid: ${uid}, role: ${role}, channel: ${CHANNEL}, app_id: ${APP_ID}`);
-
-        rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-
-        rtc.client.on("user-published", async (user, mediaType) => {
-            try {
-                console.log(`User ${user.uid} published ${mediaType}`);
-                await rtc.client.subscribe(user, mediaType);
-
-                if (mediaType === "video") {
-                    const remoteVideo = document.getElementById("remoteVideo");
-                    if (remoteVideo) {
-                        user.videoTrack.play(remoteVideo);
-                        remoteVideo.style.display = "block";
-                    }
-                }
-                if (mediaType === "audio") {
-                    user.audioTrack.play();
-                }
-            } catch (err) {
-                console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
-            }
-        });
-
-        rtc.client.on("user-unpublished", (user) => {
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
-                remoteVideo.style.display = "none";
-            }
-        });
-
-        await rtc.client.join(APP_ID, CHANNEL, token, uid);
-
-        if (isOrganizer) {
-            await rtc.client.setClientRole("host");
-
-            rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-            rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-
-            const localVideo = document.getElementById("localVideo");
-            rtc.localVideoTrack.play(localVideo);
-            localVideo.style.display = "block";
-
-            await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-        } else {
-            await rtc.client.setClientRole("audience");
-        }
-    } catch (err) {
-        console.error("initAgora error:", err);
-        alert(`Failed to initialize Agora: ${err.message}`);
-    }
-}
-
-async function joinChannel(token, uid) {
-    try {
-        if (!rtc.client) {
-            rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-
-            rtc.client.on("user-published", async (user, mediaType) => {
-                try {
-                    await rtc.client.subscribe(user, mediaType);
-                    if (mediaType === "video") {
-                        const remoteVideo = document.getElementById("remoteVideo");
-                        if (remoteVideo) {
-                            user.videoTrack.play(remoteVideo);
-                            remoteVideo.style.display = "block";
-                        }
-                    }
-                    if (mediaType === "audio") {
-                        user.audioTrack.play();
-                    }
-                } catch (err) {
-                    console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
-                }
-            });
-
-            rtc.client.on("user-unpublished", (user) => {
-                const remoteVideo = document.getElementById("remoteVideo");
-                if (remoteVideo) {
-                    remoteVideo.style.display = "none";
-                }
-            });
-        }
-
-        await rtc.client.join(APP_ID, CHANNEL, token, uid);
-        await rtc.client.setClientRole("audience");
-    } catch (err) {
-        console.error("Viewer join error:", err);
-        alert(`Failed to join channel: ${err.message}`);
-    }
-}
 
 function initializeWebSocket() {
     socket = new WebSocket(`wss://${location.host}/ws/stream/${CHANNEL}/`);
@@ -295,49 +186,90 @@ function initializeWebSocket() {
     };
 }
 
+async function initAgora() {
+    try {
+        const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Organizer failed to fetch token: ${errorText}`);
+        }
+
+        const { token, uid, role } = await response.json();
+        console.log(`Agora Token: ${token}, UID: ${uid}, Role: ${role}`);
+
+        rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+
+        rtc.client.on("user-published", async (user, mediaType) => {
+            try {
+                await rtc.client.subscribe(user, mediaType);
+                if (mediaType === "video") {
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    user.videoTrack.play(remoteVideo);
+                    remoteVideo.style.display = "block";
+                }
+                if (mediaType === "audio") {
+                    user.audioTrack.play();
+                }
+            } catch (err) {
+                console.error("Subscription error:", err);
+            }
+        });
+
+        rtc.client.on("user-unpublished", () => {
+            const remoteVideo = document.getElementById("remoteVideo");
+            remoteVideo.style.display = "none";
+        });
+
+        await rtc.client.join(APP_ID, CHANNEL, token, uid);
+
+        if (isOrganizer) {
+            await rtc.client.setClientRole("host");
+            rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+            const localVideo = document.getElementById("localVideo");
+            rtc.localVideoTrack.play(localVideo);
+            localVideo.style.display = "block";
+            await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+        } else {
+            await rtc.client.setClientRole("audience");
+        }
+
+    } catch (err) {
+        console.error("initAgora error:", err);
+        alert(`Failed to initialize Agora: ${err.message}`);
+    }
+}
+
 function sendLike(action) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-            type: "like_update",
-            action: action,
-            event_id: CHANNEL
-        }));
+        socket.send(JSON.stringify({ type: "like_update", action, event_id: CHANNEL }));
     }
 }
 
 function sendGift(gift) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-            type: "gift",
-            gift: gift,
-            event_id: CHANNEL
-        }));
+        socket.send(JSON.stringify({ type: "gift", gift, event_id: CHANNEL }));
     }
 }
 
 function leaveChat() {
-    if (rtc.client) {
-        rtc.client.leave();
-    }
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.close();
-    }
+    if (rtc.client) rtc.client.leave();
+    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
 }
 
 window.onload = () => {
     if (eventIsLive) {
-        initializeWebSocket(); // Important!
+        initializeWebSocket();
         if (isOrganizer) {
-            initAgora(); // Start stream
+            initAgora();
         }
     }
 };
 
-
 let liked = false;
 
 document.getElementById("likeBtn").onclick = () => {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
             action: liked ? "unlike" : "like",
             event_id: CHANNEL
@@ -347,14 +279,110 @@ document.getElementById("likeBtn").onclick = () => {
     }
 };
 
-// WebSocket and other logic
-const wsScheme = location.protocol === "https:" ? "wss" : "ws";
-const user = "{{ request.user.username|escapejs }}";
-const eventId = "{{ event.id|escapejs }}";
-
+// --- CHAT SOCKET ---
 const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
 const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
 
+chatSocket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const chatArea = document.getElementById("chatArea");
+
+    if (data.type === "chat") {
+        const p = document.createElement("p");
+        p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+        chatArea.appendChild(p);
+        chatArea.scrollTop = chatArea.scrollHeight;
+
+    } else if (data.type === "mic_request" && isOrganizer) {
+        const li = document.createElement("li");
+        li.id = `mic-${data.username}`;
+        li.innerHTML = `${data.username} requests mic 
+            <button onclick="approveMic('${data.username}')">✅</button>
+            <button onclick="denyMic('${data.username}')">❌</button>`;
+        document.getElementById("requestList").appendChild(li);
+
+    } else if (data.type === "mic_approved") {
+        if (!isOrganizer && data.username === user) {
+            navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+                .then(stream => {
+                    localMicStream = stream;
+                    const video = document.getElementById("remoteVideo");
+                    video.srcObject = stream;
+                    video.style.display = "block";
+                    floatEmoji("🎤🎥 You are live!");
+                })
+                .catch(() => alert("Could not access camera/microphone."));
+        } else {
+            document.getElementById(`mic-${data.username}`)?.remove();
+        }
+
+    } else if (data.type === "mic_denied") {
+        if (data.username === user) alert("❌ Your mic request was denied.");
+        document.getElementById(`mic-${data.username}`)?.remove();
+
+    } else if (data.type === "mic_revoked" && data.username === user) {
+        if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+        localMicStream = null;
+        const video = document.getElementById("remoteVideo");
+        video.srcObject = null;
+        video.style.display = "none";
+        alert("🔇 Your mic/video access was revoked.");
+    }
+};
+
+// --- LIKE SOCKET ---
+likeSocket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "like_update") {
+        document.getElementById("likeCount").innerText = data.total_likes;
+        floatEmoji("❤️");
+    } else if (data.type === "gift") {
+        const p = document.createElement("p");
+        p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
+        p.style.color = "orange";
+        document.getElementById("chatArea").appendChild(p);
+        floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`);
+    } else if (data.type === "live_started") {
+        document.getElementById("videoPlaceholder")?.remove();
+    }
+};
+
+document.getElementById("sendBtn").onclick = () => {
+    const msg = document.getElementById("messageInput").value.trim();
+    if (msg && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+        document.getElementById("messageInput").value = "";
+    }
+};
+
+document.getElementById("messageInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") document.getElementById("sendBtn").click();
+});
+
+function approveMic(username) {
+    chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+}
+
+function denyMic(username) {
+    chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+}
+
+function revokeMic(username) {
+    chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+}
+
+document.getElementById("leaveChatBtn").onclick = () => {
+    leaveChat();
+    window.location.href = "{% url 'landing' %}";
+};
+
+const micBtn = document.getElementById("requestMicBtn");
+if (micBtn) {
+    micBtn.onclick = () => {
+        chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+        alert("🎤 Mic request sent to organizer.");
+    };
+}
 
 let localMicStream = null;
 const peerConnections = {};
@@ -377,6 +405,7 @@ function giftLabel(value) {
         default: return `🎁 Coin x${value}`;
     }
 }
+
 
 // CHAT SOCKET
 chatSocket.onmessage = (event) => {
