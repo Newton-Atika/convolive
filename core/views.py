@@ -209,14 +209,14 @@ from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from datetime import timedelta
-from .models import Event, LiveStatus, Gift, Payment
+from .models import Event, LiveStatus, Gift, Payment, Conversation
 from .forms import EventForm, ConversationForm
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Cast
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
 import mux_python
 
-# Initialize Mux API client (assumes configuration is provided)
+# Initialize Mux API client
 mux_api = mux_python.LiveStreamsApi()
 
 def landing_page(request):
@@ -302,7 +302,7 @@ def create_event(request):
             mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
                 playback_policy=["public"],
                 new_asset_settings={"playback_policy": ["public"]},
-                test=False  # Set to True for testing without cost
+                test=False
             ))
             
             # Save stream info
@@ -318,15 +318,31 @@ def create_event(request):
     return render(request, 'create_event.html', {'form': form})
 
 @login_required
-def create_conversation(request, event_id):
+def create_conversation(request, event_id=None):
     if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
         return render(request, 'not_authorized.html')
     
-    event = get_object_or_404(Event, id=event_id, organizer=request.user)
+    if event_id:
+        event = get_object_or_404(Event, id=event_id, organizer=request.user)
+    else:
+        # Create a new Event for the conversation
+        event = Event(organizer=request.user, is_live=False)
+    
     if request.method == 'POST':
         form = ConversationForm(request.POST)
         if form.is_valid():
             conversation = form.save(commit=False)
+            if not event_id:
+                # Create new Event with start_time from form or current time
+                event_form = EventForm(request.POST)
+                if event_form.is_valid():
+                    event.title = event_form.cleaned_data['title']
+                    start_time = event_form.cleaned_data['start_time']
+                    if timezone.is_naive(start_time):
+                        start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
+                    event.start_time = start_time
+                    event.save()
+                    LiveStatus.objects.create(event=event, is_active=True)
             conversation.event = event
             conversation.creator = request.user
             conversation.save()
@@ -334,8 +350,13 @@ def create_conversation(request, event_id):
             return redirect('conversation_detail', event_id=event.id, conversation_id=conversation.id)
     else:
         form = ConversationForm()
+        event_form = EventForm() if not event_id else None
     
-    return render(request, 'create_conversation.html', {'form': form, 'event': event})
+    return render(request, 'create_conversation.html', {
+        'form': form,
+        'event': event,
+        'event_form': event_form,
+    })
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
