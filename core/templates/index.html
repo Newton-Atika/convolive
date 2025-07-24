@@ -171,6 +171,14 @@ const rtc = {
     localVideoTrack: null
 };
 
+const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
+const CHANNEL = '{{ event.id|escapejs }}';
+const isOrganizer = {{ is_organizer|safe }};
+const eventIsLive = {{ event.is_live|lower|safe }};
+
+let rtc = {};
+let socket;
+
 async function initAgora() {
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
@@ -179,6 +187,7 @@ async function initAgora() {
             console.error(`Organizer failed to fetch token: ${errorText}`);
             throw new Error(`Organizer failed to fetch token: ${errorText}`);
         }
+
         const { token, uid, role } = await response.json();
         console.log(`Organizer fetched token: ${token}, uid: ${uid}, role: ${role}, channel: ${CHANNEL}, app_id: ${APP_ID}`);
 
@@ -188,6 +197,7 @@ async function initAgora() {
             try {
                 console.log(`User ${user.uid} published ${mediaType}`);
                 await rtc.client.subscribe(user, mediaType);
+
                 if (mediaType === "video") {
                     const remoteVideo = document.getElementById("remoteVideo");
                     if (remoteVideo) {
@@ -214,6 +224,7 @@ async function initAgora() {
 
         if (isOrganizer) {
             await rtc.client.setClientRole("host");
+
             rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
             rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
 
@@ -235,6 +246,7 @@ async function joinChannel(token, uid) {
     try {
         if (!rtc.client) {
             rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+
             rtc.client.on("user-published", async (user, mediaType) => {
                 try {
                     await rtc.client.subscribe(user, mediaType);
@@ -252,6 +264,7 @@ async function joinChannel(token, uid) {
                     console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
                 }
             });
+
             rtc.client.on("user-unpublished", (user) => {
                 const remoteVideo = document.getElementById("remoteVideo");
                 if (remoteVideo) {
@@ -259,6 +272,7 @@ async function joinChannel(token, uid) {
                 }
             });
         }
+
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
         await rtc.client.setClientRole("audience");
     } catch (err) {
@@ -267,8 +281,32 @@ async function joinChannel(token, uid) {
     }
 }
 
+function initializeWebSocket() {
+    socket = new WebSocket(`wss://${location.host}/ws/stream/${CHANNEL}/`);
+
+    socket.onopen = () => {
+        console.log("✅ WebSocket connected");
+        if (isOrganizer && eventIsLive) {
+            socket.send(JSON.stringify({ type: "live_started" }));
+        }
+    };
+
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("📡 WebSocket message:", data);
+    };
+
+    socket.onerror = (error) => {
+        console.error("❌ WebSocket error:", error);
+    };
+
+    socket.onclose = (event) => {
+        console.warn(`⚠️ WebSocket closed: code=${event.code}, reason=${event.reason}`);
+    };
+}
+
 function sendLike(action) {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
             type: "like_update",
             action: action,
@@ -278,7 +316,7 @@ function sendLike(action) {
 }
 
 function sendGift(gift) {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
             type: "gift",
             gift: gift,
@@ -291,18 +329,20 @@ function leaveChat() {
     if (rtc.client) {
         rtc.client.leave();
     }
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         socket.close();
     }
 }
 
 window.onload = () => {
     if (eventIsLive) {
+        initializeWebSocket(); // Important!
         if (isOrganizer) {
-            initAgora();
+            initAgora(); // Start stream
         }
     }
 };
+
 
 let liked = false;
 
