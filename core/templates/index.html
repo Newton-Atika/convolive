@@ -150,89 +150,26 @@ const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
 const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = {{ is_organizer|safe }};
 const eventIsLive = {{ event.is_live|lower|safe }};
-const WEBSOCKET_URL = `wss://web-production-816d1.up.railway.app/ws/stream/${CHANNEL}/`;
-let streamSocket, reconnectAttempts = 0, maxReconnectAttempts = 5;
 
-function initializeWebSocket() {
-    try {
-        streamSocket = new WebSocket(WEBSOCKET_URL);
-        streamSocket.onopen = () => {
-            console.log(`WebSocket connected to ${WEBSOCKET_URL} for event ${CHANNEL} (isOrganizer: ${isOrganizer})`);
-            reconnectAttempts = 0; // Reset on successful connection
-            if (isOrganizer && eventIsLive) {
-                streamSocket.send(JSON.stringify({ type: "live_started" }));
-                console.log("Sent live_started message");
-            } else {
-                streamSocket.send(JSON.stringify({ type: "check_stream" }));
-                console.log("Sent check_stream message");
-            }
-        };
-        streamSocket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                console.log(`Attempting reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
-                setTimeout(initializeWebSocket, 5000);
-            } else {
-                console.error('Max reconnect attempts reached. WebSocket failed.');
-            }
-        };
-        streamSocket.onclose = (event) => {
-            console.log(`WebSocket closed for ${WEBSOCKET_URL}, code: ${event.code}, reason: ${event.reason}`);
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                console.log(`Attempting reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
-                setTimeout(initializeWebSocket, 5000);
-            } else {
-                console.error('Max reconnect attempts reached. WebSocket failed.');
-            }
-        };
-        streamSocket.onmessage = async (e) => {
-            const data = JSON.parse(e.data);
-            console.log('WebSocket message received:', data);
-            if ((data.type === "live_started" || data.type === "stream_active") && !isOrganizer) {
-                console.log("🚀 Viewer received live_started/stream_active signal");
-                try {
-                    const resp = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
-                    if (!resp.ok) {
-                        const errorText = await resp.text();
-                        console.error(`Viewer failed to fetch token: ${errorText}`);
-                        throw new Error(`Viewer failed to fetch token: ${errorText}`);
-                    }
-                    const { token, uid, role } = await resp.json();
-                    console.log(`Viewer fetched token: ${token}, uid: ${uid}, role: ${role}`);
-                    await joinChannel(token, uid);
-                } catch (err) {
-                    console.error("Viewer join error:", err);
-                    alert(`Failed to join channel: ${err.message}`);
-                }
-            } else if (data.type === "mic_request" && isOrganizer) {
-                const requestList = document.getElementById("requestList");
-                const li = document.createElement("li");
-                li.textContent = `🎤 ${data.username} requested mic`;
-                requestList.appendChild(li);
-            } else if (data.type === "like_update") {
-                const likeButton = document.querySelector(".like-button");
-                if (likeButton) {
-                    likeButton.textContent = `❤️ Like (${data.total_likes})`;
-                }
-            } else if (data.type === "gift") {
-                console.log(`Gift received: ${data.gift} from ${data.user}`);
-            }
-        };
-    } catch (err) {
-        console.error('Failed to initialize WebSocket:', err);
-        if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            console.log(`Attempting reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
-            setTimeout(initializeWebSocket, 5000);
-        } else {
-            console.error('Max reconnect attempts reached. WebSocket failed.');
-        }
-    }
-}
+const socket = new WebSocket('wss://65-255-42-70.edge.sd-rtn.com:4715/');
 
-const rtc = { client: null, localAudioTrack: null, localVideoTrack: null };
+socket.onopen = () => {
+    console.log('WebSocket connected');
+};
+
+socket.onerror = (error) => {
+    console.error('WebSocket error:', error);
+};
+
+socket.onclose = (event) => {
+    console.log('WebSocket closed:', event);
+};
+
+const rtc = {
+    client: null,
+    localAudioTrack: null,
+    localVideoTrack: null
+};
 
 async function initAgora() {
     try {
@@ -251,20 +188,15 @@ async function initAgora() {
             try {
                 console.log(`User ${user.uid} published ${mediaType}`);
                 await rtc.client.subscribe(user, mediaType);
-                console.log(`Subscribed to user ${user.uid} ${mediaType}`);
                 if (mediaType === "video") {
                     const remoteVideo = document.getElementById("remoteVideo");
                     if (remoteVideo) {
                         user.videoTrack.play(remoteVideo);
                         remoteVideo.style.display = "block";
-                        console.log(`Playing video for user ${user.uid} on remoteVideo`);
-                    } else {
-                        console.error("remoteVideo element not found");
                     }
                 }
                 if (mediaType === "audio") {
                     user.audioTrack.play();
-                    console.log(`Playing audio for user ${user.uid}`);
                 }
             } catch (err) {
                 console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
@@ -272,50 +204,26 @@ async function initAgora() {
         });
 
         rtc.client.on("user-unpublished", (user) => {
-            console.log(`User ${user.uid} unpublished`);
             const remoteVideo = document.getElementById("remoteVideo");
             if (remoteVideo) {
                 remoteVideo.style.display = "none";
             }
         });
 
-        console.log(`Attempting to join channel ${CHANNEL} with uid ${uid}, token: ${token}`);
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
-        console.log(`Joined channel ${CHANNEL} as uid ${uid}`);
 
         if (isOrganizer) {
             await rtc.client.setClientRole("host");
-            console.log("Set client role to host");
-            try {
-                rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-                console.log("Created local audio and video tracks");
+            rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
 
-                const localVideo = document.getElementById("localVideo");
-                if (localVideo) {
-                    rtc.localVideoTrack.play(localVideo);
-                    localVideo.style.display = "block";
-                    console.log("Playing local video");
-                } else {
-                    console.error("localVideo element not found");
-                }
+            const localVideo = document.getElementById("localVideo");
+            rtc.localVideoTrack.play(localVideo);
+            localVideo.style.display = "block";
 
-                await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-                console.log("Published local audio and video tracks");
-
-                // ✅ Only now send the WebSocket message
-                if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
-                    streamSocket.send(JSON.stringify({ type: "live_started" }));
-                    console.log("✅ Sent live_started after publishing");
-                }
-
-            } catch (err) {
-                console.error("Failed to publish tracks:", err);
-                alert(`Failed to publish video: ${err.message}`);
-            }
+            await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
         } else {
             await rtc.client.setClientRole("audience");
-            console.log("Set client role to audience");
         }
     } catch (err) {
         console.error("initAgora error:", err);
@@ -325,35 +233,26 @@ async function initAgora() {
 
 async function joinChannel(token, uid) {
     try {
-        console.log(`Viewer joining channel ${CHANNEL} with uid ${uid}, token: ${token}`);
         if (!rtc.client) {
             rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-            console.log("Created viewer Agora client");
             rtc.client.on("user-published", async (user, mediaType) => {
                 try {
-                    console.log(`Viewer: User ${user.uid} published ${mediaType}`);
                     await rtc.client.subscribe(user, mediaType);
-                    console.log(`Viewer: Subscribed to user ${user.uid} ${mediaType}`);
                     if (mediaType === "video") {
                         const remoteVideo = document.getElementById("remoteVideo");
                         if (remoteVideo) {
                             user.videoTrack.play(remoteVideo);
                             remoteVideo.style.display = "block";
-                            console.log(`Viewer: Playing video for user ${user.uid} on remoteVideo`);
-                        } else {
-                            console.error("Viewer: remoteVideo element not found");
                         }
                     }
                     if (mediaType === "audio") {
                         user.audioTrack.play();
-                        console.log(`Viewer: Playing audio for user ${user.uid}`);
                     }
                 } catch (err) {
-                    console.error(`Viewer: Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
+                    console.error(`Failed to subscribe to user ${user.uid} ${mediaType}:`, err);
                 }
             });
             rtc.client.on("user-unpublished", (user) => {
-                console.log(`Viewer: User ${user.uid} unpublished`);
                 const remoteVideo = document.getElementById("remoteVideo");
                 if (remoteVideo) {
                     remoteVideo.style.display = "none";
@@ -362,7 +261,6 @@ async function joinChannel(token, uid) {
         }
         await rtc.client.join(APP_ID, CHANNEL, token, uid);
         await rtc.client.setClientRole("audience");
-        console.log("Viewer joined as audience");
     } catch (err) {
         console.error("Viewer join error:", err);
         alert(`Failed to join channel: ${err.message}`);
@@ -370,47 +268,52 @@ async function joinChannel(token, uid) {
 }
 
 function sendLike(action) {
-    if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
-        streamSocket.send(JSON.stringify({
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
             type: "like_update",
             action: action,
             event_id: CHANNEL
         }));
-        console.log(`Sent like action: ${action}`);
     }
 }
 
 function sendGift(gift) {
-    if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
-        streamSocket.send(JSON.stringify({
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
             type: "gift",
             gift: gift,
             event_id: CHANNEL
         }));
-        console.log(`Sent gift: ${gift}`);
     }
 }
 
 function leaveChat() {
     if (rtc.client) {
         rtc.client.leave();
-        console.log("Left Agora channel");
     }
-    if (streamSocket && streamSocket.readyState === WebSocket.OPEN) {
-        streamSocket.close();
-        console.log("Closed WebSocket");
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
     }
 }
 
 window.onload = () => {
     if (eventIsLive) {
-        console.log("Initializing WebSocket and Agora");
-        initializeWebSocket();
         if (isOrganizer) {
             initAgora();
         }
-    } else {
-        console.log("Event is not live and user has not paid. Waiting for payment.");
+    }
+};
+
+let liked = false;
+
+document.getElementById("likeBtn").onclick = () => {
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            action: liked ? "unlike" : "like",
+            event_id: CHANNEL
+        }));
+        liked = !liked;
+        document.getElementById("likeBtn").classList.toggle("liked", liked);
     }
 };
 
