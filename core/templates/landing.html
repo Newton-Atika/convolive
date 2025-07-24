@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>LiveStream App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
         body {
             margin: 0;
@@ -13,7 +12,6 @@
             background-color: #000;
             color: #fff;
         }
-
         .navbar {
             display: flex;
             flex-wrap: wrap;
@@ -23,44 +21,50 @@
             padding: 1rem 2rem;
             border-bottom: 2px solid #fff;
         }
-
         .logo {
             font-size: 1.5rem;
             font-weight: bold;
         }
-
         .nav-links {
             display: flex;
             flex-wrap: wrap;
             gap: 1rem;
             margin-top: 0.5rem;
         }
-
         .nav-links a {
             color: #fff;
             text-decoration: none;
             font-weight: 500;
         }
-
         .nav-links a:hover {
             text-decoration: underline;
         }
-
+        .nav-links form {
+            display: inline;
+        }
+        .nav-links button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .nav-links button:hover {
+            text-decoration: underline;
+        }
         .welcome-section {
             text-align: center;
             padding: 3rem 1rem;
             border-bottom: 2px solid #444;
         }
-
         .welcome-section h1 {
             font-size: 2.5rem;
             margin-bottom: 1rem;
         }
-
         .container {
             padding: 2rem 1rem;
         }
-
         .tabs {
             display: flex;
             flex-wrap: wrap;
@@ -68,7 +72,6 @@
             gap: 0.5rem;
             margin-bottom: 2rem;
         }
-
         .tab-btn {
             background-color: #000;
             color: #fff;
@@ -79,22 +82,18 @@
             flex: 1 1 30%;
             max-width: 200px;
         }
-
         .tab-btn.active {
             background-color: #fff;
             color: #000;
             font-weight: bold;
         }
-
         .tab-content {
             display: none;
         }
-
         .tab-content.active {
             display: block;
             animation: fadeIn 0.4s ease-in-out;
         }
-
         .event-card {
             border: 1px solid #fff;
             padding: 1rem;
@@ -102,7 +101,6 @@
             margin-bottom: 1.5rem;
             background-color: #111;
         }
-
         .join-btn {
             display: inline-block;
             margin-top: 10px;
@@ -113,34 +111,28 @@
             font-weight: bold;
             text-decoration: none;
         }
-
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         /* Responsive Design */
         @media (max-width: 768px) {
             .navbar {
                 flex-direction: column;
                 align-items: flex-start;
             }
-
             .welcome-section h1 {
                 font-size: 2rem;
             }
-
             .tab-btn {
                 flex: 1 1 100%;
                 max-width: 100%;
             }
         }
-
         @media (max-width: 480px) {
             .welcome-section h1 {
                 font-size: 1.5rem;
             }
-
             .event-card h3 {
                 font-size: 1.2rem;
             }
@@ -155,26 +147,26 @@
                 {% if user.profile.is_organizer %}
                     <a href="{% url 'organizer_dashboard' %}">Organizer Dashboard</a>
                 {% endif %}
-                <a href="{% url 'logout' %}">Logout</a>
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit">Logout</button>
+                </form>
             {% else %}
                 <a href="{% url 'login' %}">Login</a>
                 <a href="{% url 'signup' %}">Sign Up</a>
             {% endif %}
         </div>
     </nav>
-
     <header class="welcome-section">
         <h1>Welcome to the Future of Live Engagement</h1>
         <p>Join live sessions, engaging conversations, or catch up on upcoming events!</p>
     </header>
-
     <div class="container">
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives Now</button>
             <button class="tab-btn" onclick="openTab(event, 'conversations')">💬 Conversations</button>
             <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
         </div>
-
         <div id="lives" class="tab-content active">
             {% if lives_now %}
                 {% for event in lives_now %}
@@ -189,7 +181,6 @@
                 <p>No live events now.</p>
             {% endif %}
         </div>
-
         <div id="conversations" class="tab-content">
             {% if conversations_now %}
                 {% for event in conversations_now %}
@@ -204,7 +195,6 @@
                 <p>No conversations happening now.</p>
             {% endif %}
         </div>
-
         <div id="upcoming" class="tab-content">
             {% if upcoming %}
                 {% for event in upcoming %}
@@ -220,16 +210,13 @@
             {% endif %}
         </div>
     </div>
-
     <!-- Tabs Script -->
     <script>
         function openTab(evt, tabId) {
             const tabs = document.querySelectorAll(".tab-content");
             const buttons = document.querySelectorAll(".tab-btn");
-
             tabs.forEach(tab => tab.classList.remove("active"));
             buttons.forEach(btn => btn.classList.remove("active"));
-
             document.getElementById(tabId).classList.add("active");
             evt.currentTarget.classList.add("active");
         }
