@@ -99,22 +99,6 @@
         .toggle-btn.inactive:hover {
             background: #c00;
         }
-        .messages {
-            margin: 1rem 0;
-            text-align: center;
-        }
-        .messages .message {
-            padding: 0.5rem;
-            border-radius: 5px;
-        }
-        .messages .success {
-            background-color: #0f0;
-            color: #000;
-        }
-        .messages .error {
-            background-color: #f00;
-            color: #fff;
-        }
         @media (max-width: 600px) {
             .navbar {
                 flex-direction: column;
@@ -144,13 +128,6 @@
         </div>
     </div>
     <div class="content">
-        {% if messages %}
-            <div class="messages">
-                {% for message in messages %}
-                    <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</div>
-                {% endfor %}
-            </div>
-        {% endif %}
         <div class="actions">
             <a href="{% url 'create_event' %}" style="text-decoration: none;">
                 <div class="action-card">
