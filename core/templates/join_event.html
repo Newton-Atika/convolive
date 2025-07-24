@@ -84,7 +84,7 @@
 </head>
 <body>
 
-{% if not event.is_live and not user_has_paid %}
+{% if not event.is_live and not has_paid %}
   <div class="payment-warning">
     ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
     <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
