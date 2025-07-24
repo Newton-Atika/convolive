@@ -446,22 +446,23 @@ def manage_organizers(request):
     return render(request, 'manage_organizers.html', {'users': users})
 
 
+from django.shortcuts import render
+from django.utils import timezone
+from datetime import timedelta
+from .models import Event
+
 def landing_page(request):
     now = timezone.now()
     next_hour = now + timedelta(hours=1)
-
-    active_event_ids = LiveStatus.objects.filter(is_active=True).values_list('event_id', flat=True)
-
-    lives_now = Event.objects.filter(is_live=True, start_time__lte=now, id__in=active_event_ids)
-    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now, id__in=active_event_ids)
-    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour)
-    ended = Event.objects.exclude(id__in=active_event_ids)
-
+    
+    lives_now = Event.objects.filter(is_live=True, start_time__lte=now).select_related('organizer')
+    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now).select_related('organizer')
+    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour).select_related('organizer')
+    
     return render(request, 'landing.html', {
         'lives_now': lives_now,
         'conversations_now': conversations_now,
         'upcoming': upcoming,
-        'ended': ended,
     })
 
 
