@@ -170,23 +170,16 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse
 from datetime import timedelta
-import uuid
-import requests
-import logging
-from .models import Event, LiveStatus, Gift, Payment
-from .forms import EventForm
+from .models import Event, LiveStatus, Gift, Payment, Conversation
+from .forms import EventForm, ConversationForm
+from django.db.models import Sum, IntegerField
+from django.db.models.functions import Cast
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
 import mux_python
-from django.conf import settings
 
 # Initialize Mux API client
 mux_api = mux_python.LiveStreamsApi()
-
-# Set up logging
-logger = logging.getLogger(__name__)
 
 def landing_page(request):
     now = timezone.now()
@@ -209,8 +202,14 @@ def organizer_dashboard(request):
     
     my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
     
-    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).aggregate(total=Sum('amount'))['total'] or 0
-    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(total=Sum('amount'))['total'] or 0
+    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
+        amount_int=Cast('amount', IntegerField())
+    ).aggregate(total=Sum('amount_int'))['total'] or 0
+    
+    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
     total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
     
     return render(request, 'organizer_dashboard.html', {
@@ -261,22 +260,19 @@ def create_event(request):
             # Create LiveStatus with is_active=True
             LiveStatus.objects.create(event=event, is_active=True)
             
-            # Create Mux Live Stream for live events
-            if event.is_live:
-                try:
-                    mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
-                        playback_policy=["public"],
-                        new_asset_settings={"playback_policy": ["public"]},
-                        test=False
-                    ))
-                    event.mux_stream_key = mux_stream.data.stream_key
-                    event.mux_playback_id = mux_stream.data.playback_ids[0].id
-                    event.save()
-                except Exception as e:
-                    logger.error(f"Mux stream creation failed for event {event.id}: {str(e)}")
-                    messages.error(request, "Failed to create live stream. Event created without streaming.")
+            # Create Mux Live Stream
+            mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
+                playback_policy=["public"],
+                new_asset_settings={"playback_policy": ["public"]},
+                test=False
+            ))
             
-            messages.success(request, f"{'Live event' if event.is_live else 'Conversation'} '{event.title}' created successfully.")
+            # Save stream info
+            event.mux_stream_key = mux_stream.data.stream_key
+            event.mux_playback_id = mux_stream.data.playback_ids[0].id
+            event.save()
+            
+            messages.success(request, f"Event '{event.title}' created successfully.")
             return redirect('event_detail', event_id=event.id)
     else:
         form = EventForm()
@@ -284,50 +280,91 @@ def create_event(request):
     return render(request, 'create_event.html', {'form': form})
 
 @login_required
-def create_conversation(request):
+def create_conversation(request, event_id=None):
     if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
         return render(request, 'not_authorized.html')
     
-    if request.method == 'POST':
-        form = EventForm(request.POST, request.FILES)
-        if form.is_valid():
-            event = form.save(commit=False)
-            event.organizer = request.user
-            event.is_live = False  # Force is_live=False for conversations
-            
-            # Ensure start_time is timezone-aware in EAT (Africa/Nairobi)
-            start_time = form.cleaned_data['start_time']
-            if timezone.is_naive(start_time):
-                start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
-            event.start_time = start_time
-            
-            event.save()
-            
-            # Create LiveStatus with is_active=True
-            LiveStatus.objects.create(event=event, is_active=True)
-            
-            messages.success(request, f"Conversation '{event.title}' created successfully.")
-            return redirect('event_detail', event_id=event.id)
+    if event_id:
+        event = get_object_or_404(Event, id=event_id, organizer=request.user)
     else:
-        form = EventForm(initial={'is_live': False})
+        # Create a new Event for the conversation
+        event = Event(organizer=request.user, is_live=False)
     
-    return render(request, 'create_conversation.html', {'form': form})
-
+    if request.method == 'POST':
+        form = ConversationForm(request.POST)
+        if form.is_valid():
+            conversation = form.save(commit=False)
+            if not event_id:
+                # Create new Event with start_time from form or current time
+                event_form = EventForm(request.POST)
+                if event_form.is_valid():
+                    event.title = event_form.cleaned_data['title']
+                    start_time = event_form.cleaned_data['start_time']
+                    if timezone.is_naive(start_time):
+                        start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
+                    event.start_time = start_time
+                    event.save()
+                    LiveStatus.objects.create(event=event, is_active=True)
+            conversation.event = event
+            conversation.creator = request.user
+            conversation.save()
+            messages.success(request, f"Conversation for '{event.title}' created successfully.")
+            return redirect('conversation_detail', event_id=event.id, conversation_id=conversation.id)
+    else:
+        form = ConversationForm()
+        event_form = EventForm() if not event_id else None
+    
+    return render(request, 'create_conversation.html', {
+        'form': form,
+        'event': event,
+        'event_form': event_form,
+    })
 @login_required
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     
-    # Live events don't require payment
-    if event.is_live:
-        return render(request, 'event_detail.html', {'event': event})
+    # Check if the event has ended
+    try:
+        status = LiveStatus.objects.get(event=event)
+        if not status.is_active:
+            logger.info(f"User {request.user.id} attempted to join inactive event {event.id}")
+            messages.error(request, f"The {'live event' if event.is_live else 'conversation'} has ended.")
+            return render(request, 'live_has_ended.html', {'event': event})
+    except LiveStatus.DoesNotExist:
+        logger.warning(f"No LiveStatus for event {event.id}")
+        pass
     
-    # Conversations require verified payment
-    if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
-        return render(request, 'event_detail.html', {'event': event})
+    # Conversations require payment, live events do not
+    if not event.is_live:
+        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        if not has_paid:
+            logger.info(f"User {request.user.id} needs payment for conversation {event.id}")
+            messages.info(request, "Payment of 50 KES is required to join this conversation.")
+            return redirect('pay_event', event_id=event.id)
     
-    # Redirect to payment if no verified payment
-    messages.info(request, "Payment required to join this conversation.")
-    return redirect('pay_event', event_id=event.id)
+    # Add user as a live participant
+    LiveParticipant.objects.get_or_create(event=event, user=request.user)
+    
+    # Get participant count
+    participant_count = LiveParticipant.objects.filter(event=event).count()
+    
+    # If organizer, list all participants
+    participants = []
+    if request.user == event.organizer:
+        participants = LiveParticipant.objects.filter(event=event).select_related('user')
+    
+    is_organizer = request.user.is_authenticated and request.user == event.organizer
+    
+    logger.info(f"User {request.user.id} joined {'live event' if event.is_live else 'conversation'} {event.id}")
+    
+    return render(request, 'index.html', {
+        'event': event,
+        'participants': participants,
+        'participant_count': participant_count,
+        'is_organizer': 'true' if is_organizer else 'false',
+        'organizer_id': event.organizer.pk,
+        'mux_playback_id': event.mux_playback_id,
+    })
 
 @login_required
 def initiate_paystack_payment(request, event_id):
