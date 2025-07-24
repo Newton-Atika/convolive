@@ -325,7 +325,7 @@ const eventId = "{{ event.id|escapejs }}";
 const chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
 const likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
 
-let liked = false;
+
 let localMicStream = null;
 const peerConnections = {};
 const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
