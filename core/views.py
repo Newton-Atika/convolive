@@ -204,36 +204,125 @@ def join_event(request, event_id):
         'mux_playback_id': event.mux_playback_id,
     })
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from datetime import timedelta
+from .models import Event, LiveStatus, Gift, Payment
+from .forms import EventForm, ConversationForm
+from django.db.models import Sum, IntegerField
+from django.db.models.functions import Cast
+from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
+import mux_python
+
+# Initialize Mux API client (assumes configuration is provided)
+mux_api = mux_python.LiveStreamsApi()
+
+def landing_page(request):
+    now = timezone.now()
+    next_hour = now + timedelta(hours=1)
+    
+    lives_now = Event.objects.filter(is_live=True, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
+    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
+    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour, livestatus__is_active=True).select_related('organizer')
+    
+    return render(request, 'landing.html', {
+        'lives_now': lives_now,
+        'conversations_now': conversations_now,
+        'upcoming': upcoming,
+    })
+
+@login_required
+def organizer_dashboard(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
+    my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
+    
+    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
+        amount_int=Cast('amount', IntegerField())
+    ).aggregate(total=Sum('amount_int'))['total'] or 0
+    
+    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
+    
+    return render(request, 'organizer_dashboard.html', {
+        'my_events': my_events,
+        'total_gift_revenue': total_gift_revenue,
+        'total_join_revenue': total_join_revenue,
+        'total_revenue': total_revenue,
+    })
+
+@login_required
+def toggle_event_status(request, event_id):
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
+    event = Event.objects.filter(id=event_id, organizer=request.user).first()
+    if not event:
+        messages.error(request, "Event not found or you are not the organizer.")
+        return redirect('organizer_dashboard')
+    
+    live_status, created = LiveStatus.objects.get_or_create(event=event, defaults={'is_active': True})
+    if request.method == 'POST':
+        live_status.is_active = not live_status.is_active
+        live_status.save()
+        status = "active" if live_status.is_active else "inactive"
+        messages.success(request, f"Event '{event.title}' is now {status}.")
+    
+    return redirect('organizer_dashboard')
+
+@login_required
 def create_event(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES)
         if form.is_valid():
             event = form.save(commit=False)
             event.organizer = request.user
+            
+            # Ensure start_time is timezone-aware in EAT (Africa/Nairobi)
+            start_time = form.cleaned_data['start_time']
+            if timezone.is_naive(start_time):
+                start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
+            event.start_time = start_time
+            
             event.save()
-
-            # ✅ Create Mux Live Stream
+            
+            # Create LiveStatus with is_active=True
+            LiveStatus.objects.create(event=event, is_active=True)
+            
+            # Create Mux Live Stream
             mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
                 playback_policy=["public"],
                 new_asset_settings={"playback_policy": ["public"]},
                 test=False  # Set to True for testing without cost
             ))
-
-            # ✅ Save stream info
+            
+            # Save stream info
             event.mux_stream_key = mux_stream.data.stream_key
             event.mux_playback_id = mux_stream.data.playback_ids[0].id
             event.save()
-
+            
+            messages.success(request, f"Event '{event.title}' created successfully.")
             return redirect('event_detail', event_id=event.id)
     else:
         form = EventForm()
-
+    
     return render(request, 'create_event.html', {'form': form})
 
 @login_required
 def create_conversation(request, event_id):
-    event = get_object_or_404(Event, id=event_id)
-
+    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
+        return render(request, 'not_authorized.html')
+    
+    event = get_object_or_404(Event, id=event_id, organizer=request.user)
     if request.method == 'POST':
         form = ConversationForm(request.POST)
         if form.is_valid():
@@ -241,12 +330,12 @@ def create_conversation(request, event_id):
             conversation.event = event
             conversation.creator = request.user
             conversation.save()
+            messages.success(request, f"Conversation for '{event.title}' created successfully.")
             return redirect('conversation_detail', event_id=event.id, conversation_id=conversation.id)
     else:
         form = ConversationForm()
-
+    
     return render(request, 'create_conversation.html', {'form': form, 'event': event})
-
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
@@ -420,74 +509,6 @@ def manage_organizers(request):
         return HttpResponseRedirect(reverse('manage_organizers'))
 
     return render(request, 'manage_organizers.html', {'users': users})
-
-
-from django.shortcuts import render, redirect
-from django.utils import timezone
-from django.contrib import messages
-from datetime import timedelta
-from .models import Event, LiveStatus, Gift, Payment
-from django.db.models import Sum, IntegerField
-from django.db.models.functions import Cast
-from django.contrib.auth.decorators import login_required
-
-def landing_page(request):
-    now = timezone.now()
-    next_hour = now + timedelta(hours=1)
-    
-    lives_now = Event.objects.filter(is_live=True, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
-    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
-    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour, livestatus__is_active=True).select_related('organizer')
-    
-    return render(request, 'landing.html', {
-        'lives_now': lives_now,
-        'conversations_now': conversations_now,
-        'upcoming': upcoming,
-    })
-
-@login_required
-def organizer_dashboard(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
-        return render(request, 'not_authorized.html')
-    
-    my_events = Event.objects.filter(organizer=request.user).select_related('livestatus').order_by('-start_time')
-    
-    total_gift_revenue = Gift.objects.filter(event__organizer=request.user).annotate(
-        amount_int=Cast('amount', IntegerField())
-    ).aggregate(total=Sum('amount_int'))['total'] or 0
-    
-    total_join_revenue = Payment.objects.filter(event__organizer=request.user, verified=True).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-    
-    total_revenue = (total_gift_revenue or 0) + (total_join_revenue or 0)
-    
-    return render(request, 'organizer_dashboard.html', {
-        'my_events': my_events,
-        'total_gift_revenue': total_gift_revenue,
-        'total_join_revenue': total_join_revenue,
-        'total_revenue': total_revenue,
-    })
-
-@login_required
-def toggle_event_status(request, event_id):
-    if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
-        return render(request, 'not_authorized.html')
-    
-    event = Event.objects.filter(id=event_id, organizer=request.user).first()
-    if not event:
-        messages.error(request, "Event not found or you are not the organizer.")
-        return redirect('organizer_dashboard')
-    
-    live_status, created = LiveStatus.objects.get_or_create(event=event, defaults={'is_active': True})
-    if request.method == 'POST':
-        live_status.is_active = not live_status.is_active
-        live_status.save()
-        status = "active" if live_status.is_active else "inactive"
-        messages.success(request, f"Event '{event.title}' is now {status}.")
-    
-    return redirect('organizer_dashboard')
-
 
 def signup_view(request):
     if request.method == 'POST':
