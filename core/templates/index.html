@@ -52,6 +52,14 @@
             border-radius: 8px;
             margin-top: 1rem;
         }
+        .chat p {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            border-radius: 5px;
+        }
+        .chat p.own-message {
+            background-color: #555; /* Distinct gray for current user's messages */
+        }
         input, select, button {
             padding: 0.5rem;
             border: none;
@@ -273,7 +281,9 @@ function initializeWebSockets() {
         const chatArea = document.getElementById("chatArea");
         if (data.type === "chat") {
             const p = document.createElement("p");
-            p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+            const isOwnMessage = data.username === user;
+            p.className = isOwnMessage ? "own-message" : "";
+            p.innerHTML = `<strong>@${data.username}</strong>: ${data.message}`;
             chatArea.appendChild(p);
             chatArea.scrollTop = chatArea.scrollHeight;
         } else if (data.type === "mic_request" && isOrganizer) {
@@ -323,6 +333,7 @@ function initializeWebSockets() {
             const p = document.createElement("p");
             p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
             p.style.color = "orange";
+            p.className = data.user === user ? "own-message" : "";
             document.getElementById("chatArea").appendChild(p);
             floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
         } else if (data.type === "live_started") {
