@@ -2,6 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from django.apps import apps
+from django.contrib.auth import get_user_model
 
 class EventLikeConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -170,11 +171,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         event = Event.objects.get(id=self.event_id)
         ChatMessage.objects.create(event=event, username=username, message=message)
 
-from channels.generic.websocket import AsyncWebsocketConsumer
-import json
-from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
-
 class StreamConsumer(AsyncWebsocketConsumer):
     organizers = {}  # event_id => channel_name
     viewers = {}     # event_id => { username: channel_name }
@@ -218,6 +214,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         msg_type = data.get("type")
+        print(f"[RECEIVED] {self.username} sent {msg_type} for event {self.event_id}")
 
         if msg_type == "live_started" and self.is_organizer:
             print(f"[LIVE_STARTED] Broadcasting for event {self.event_id}")
@@ -226,11 +223,12 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 {"type": "broadcast_live_started"}
             )
         elif msg_type == "check_stream":
+            print(f"[CHECK_STREAM] Processing check_stream for event {self.event_id}")
             if self.event_id in StreamConsumer.organizers:
                 await self.send(json.dumps({"type": "stream_active"}))
-                print(f"[CHECK_STREAM] Organizer live for event {self.event_id}")
+                print(f"[CHECK_STREAM] Sent stream_active to {self.username} for event {self.event_id}")
             else:
-                print(f"[CHECK_STREAM] Organizer not live for event {self.event_id}")
+                print(f"[CHECK_STREAM] No organizer live for event {self.event_id}")
         elif msg_type == "mic_request" and not self.is_organizer:
             print(f"[MIC_REQUEST] {self.username} for event {self.event_id}")
             await self.channel_layer.group_send(
