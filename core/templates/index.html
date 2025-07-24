@@ -94,15 +94,29 @@
         }
         .float-emoji {
             position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 50%; /* Start from middle of video section */
+            right: 10px; /* Align to right side of screen with slight margin */
             font-size: 1.5rem;
-            animation: float 4s ease-in-out;
+            animation: float 4s ease-in-out forwards;
         }
         @keyframes float {
-            0% { opacity: 1; transform: translateX(-50%) translateY(0); }
-            100% { opacity: 0; transform: translateX(-50%) translateY(-100px); }
+            0% {
+                opacity: 1;
+                transform: translateY(0) translateX(0);
+            }
+            25% {
+                transform: translateY(-25vh) translateX(20px); /* Wave to the right */
+            }
+            50% {
+                transform: translateY(-50vh) translateX(-20px); /* Wave to the left */
+            }
+            75% {
+                transform: translateY(-75vh) translateX(20px); /* Wave to the right again */
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100vh) translateX(0); /* End at top, centered */
+            }
         }
         /* Mobile-specific adjustments */
         @media (max-width: 600px) {
