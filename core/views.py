@@ -176,7 +176,7 @@ from datetime import timedelta
 import uuid
 import requests
 import logging
-from .models import Event, LiveStatus, Gift, Payment, LiveParticipant
+from .models import Event, LiveStatus, Gift, Payment
 from .forms import EventForm
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
 import mux_python
@@ -317,48 +317,17 @@ def create_conversation(request):
 def join_event(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     
-    # Check if the event has ended
-    try:
-        status = LiveStatus.objects.get(event=event)
-        if not status.is_active:
-            logger.info(f"User {request.user.id} attempted to join inactive event {event.id}")
-            messages.error(request, f"The {'live event' if event.is_live else 'conversation'} has ended.")
-            return render(request, 'live_has_ended.html', {'event': event})
-    except LiveStatus.DoesNotExist:
-        logger.warning(f"No LiveStatus for event {event.id}")
-        pass
+    # Live events don't require payment
+    if event.is_live:
+        return render(request, 'event_detail.html', {'event': event})
     
-    # Conversations require payment, live events do not
-    if not event.is_live:
-        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
-        if not has_paid:
-            logger.info(f"User {request.user.id} needs payment for conversation {event.id}")
-            messages.info(request, "Payment of 50 KES is required to join this conversation.")
-            return redirect('pay_event', event_id=event.id)
+    # Conversations require verified payment
+    if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
+        return render(request, 'event_detail.html', {'event': event})
     
-    # Add user as a live participant
-    LiveParticipant.objects.get_or_create(event=event, user=request.user)
-    
-    # Get participant count
-    participant_count = LiveParticipant.objects.filter(event=event).count()
-    
-    # If organizer, list all participants
-    participants = []
-    if request.user == event.organizer:
-        participants = LiveParticipant.objects.filter(event=event).select_related('user')
-    
-    is_organizer = request.user.is_authenticated and request.user == event.organizer
-    
-    logger.info(f"User {request.user.id} joined {'live event' if event.is_live else 'conversation'} {event.id}")
-    
-    return render(request, 'index.html', {
-        'event': event,
-        'participants': participants,
-        'participant_count': participant_count,
-        'is_organizer': 'true' if is_organizer else 'false',
-        'organizer_id': event.organizer.pk,
-        'mux_playback_id': event.mux_playback_id,
-    })
+    # Redirect to payment if no verified payment
+    messages.info(request, "Payment required to join this conversation.")
+    return redirect('pay_event', event_id=event.id)
 
 @login_required
 def initiate_paystack_payment(request, event_id):
@@ -366,12 +335,10 @@ def initiate_paystack_payment(request, event_id):
     
     # Live events don't require payment
     if event.is_live:
-        logger.info(f"User {request.user.id} joining live event {event.id} without payment")
         return redirect('join_event', event_id=event.id)
     
     # Check if already paid
     if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
-        logger.info(f"User {request.user.id} already paid for conversation {event.id}")
         return redirect('join_event', event_id=event.id)
     
     # Create unique reference
@@ -405,7 +372,6 @@ def initiate_paystack_payment(request, event_id):
         response_data = response.json()
         
         if response_data.get('status') and 'data' in response_data and 'authorization_url' in response_data['data']:
-            logger.info(f"Payment initiated for user {request.user.id}, conversation {event.id}, reference {reference}")
             return redirect(response_data['data']['authorization_url'])
         else:
             logger.error(f"Paystack initialization failed for reference {reference}: {response_data}")
@@ -440,7 +406,6 @@ def verify_payment(request):
         if res_data.get('status') and res_data.get('data', {}).get('status') == 'success':
             payment.verified = True
             payment.save()
-            logger.info(f"Payment verified for user {payment.user.id}, conversation {payment.event.id}, reference {reference}")
             messages.success(request, "Payment verified successfully. You can now join the conversation.")
             return redirect('join_event', event_id=payment.event.id)
         else:
