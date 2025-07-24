@@ -67,12 +67,12 @@
         }
         .tabs-container {
             overflow-x: auto;
-            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-            scrollbar-width: none; /* Hide scrollbar in Firefox */
-            -ms-overflow-style: none; /* Hide scrollbar in IE/Edge */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
         .tabs-container::-webkit-scrollbar {
-            display: none; /* Hide scrollbar in Chrome/Safari */
+            display: none;
         }
         .tabs {
             display: flex;
@@ -106,7 +106,7 @@
         .event-grid {
             display: grid;
             gap: 0.5rem;
-            grid-template-columns: repeat(2, 1fr); /* 2 cards per row on phones */
+            grid-template-columns: repeat(2, 1fr);
         }
         .event-card {
             border: 1px solid #fff;
@@ -114,7 +114,7 @@
             border-radius: 8px;
             background-color: #111;
             font-size: 0.9rem;
-            max-width: 150px; /* Smaller card size */
+            max-width: 150px;
         }
         .event-card h3 {
             margin: 0 0 0.3rem 0;
@@ -145,10 +145,9 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        /* Phone: Smaller tabs with slider */
         @media (max-width: 480px) {
             .tabs-container {
-                padding-bottom: 0.5rem; /* Space for scrolling */
+                padding-bottom: 0.5rem;
             }
             .tabs {
                 flex-wrap: nowrap;
@@ -156,7 +155,7 @@
             }
             .tab-btn {
                 flex: 0 0 auto;
-                max-width: 100px; /* Smaller buttons */
+                max-width: 100px;
                 padding: 0.3rem 0.6rem;
                 font-size: 0.8rem;
             }
@@ -174,25 +173,22 @@
                 padding: 0.2rem 0.5rem;
             }
         }
-        /* Tablet: 3 cards per row */
         @media (min-width: 481px) and (max-width: 768px) {
             .event-grid {
-                grid-template-columns: repeat(3, 1fr); /* 3 cards per row */
+                grid-template-columns: repeat(3, 1fr);
             }
             .event-card {
                 max-width: 180px;
             }
         }
-        /* Laptop: 6 cards per row */
         @media (min-width: 769px) {
             .event-grid {
-                grid-template-columns: repeat(6, 1fr); /* 6 cards per row */
+                grid-template-columns: repeat(6, 1fr);
             }
             .event-card {
                 max-width: 160px;
             }
         }
-        /* Responsive Design */
         @media (max-width: 768px) {
             .navbar {
                 flex-direction: column;
@@ -287,7 +283,6 @@
             {% endif %}
         </div>
     </div>
-    <!-- Tabs Script -->
     <script>
         function openTab(evt, tabId) {
             const tabs = document.querySelectorAll(".tab-content");
