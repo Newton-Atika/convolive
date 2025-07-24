@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Event, Conversation
+from .models import Event
 
 class CustomUserCreationForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -34,13 +34,3 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['start_time'].label = 'Start Time (EAT, Nairobi)'
-
-class ConversationForm(forms.ModelForm):
-    class Meta:
-        model = Conversation
-        fields = ['title']  # Adjust based on actual Conversation model
-        widgets = {
-            'title': forms.TextInput(
-                attrs={'style': 'background-color: #000; color: #fff; border: 1px solid #fff;'}
-            ),
-        }
