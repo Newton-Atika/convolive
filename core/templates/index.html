@@ -151,7 +151,7 @@ const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = {{ is_organizer|safe }};
 const eventIsLive = {{ event.is_live|lower|safe }};
 
-const socket = new WebSocket('wss://65.255.42.70:4713/');
+const socket = new WebSocket('ws://65.255.42.70:4713/');
 
 socket.onopen = () => {
     console.log('WebSocket connected');
