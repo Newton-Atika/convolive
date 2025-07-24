@@ -209,8 +209,8 @@ from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from datetime import timedelta
-from .models import Event, LiveStatus, Gift, Payment, Conversation
-from .forms import EventForm, ConversationForm
+from .models import Event, LiveStatus, Gift, Payment
+from .forms import EventForm
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Cast
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
@@ -298,19 +298,18 @@ def create_event(request):
             # Create LiveStatus with is_active=True
             LiveStatus.objects.create(event=event, is_active=True)
             
-            # Create Mux Live Stream
-            mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
-                playback_policy=["public"],
-                new_asset_settings={"playback_policy": ["public"]},
-                test=False
-            ))
+            # Create Mux Live Stream for live events
+            if event.is_live:
+                mux_stream = mux_api.create_live_stream(CreateLiveStreamRequest(
+                    playback_policy=["public"],
+                    new_asset_settings={"playback_policy": ["public"]},
+                    test=False
+                ))
+                event.mux_stream_key = mux_stream.data.stream_key
+                event.mux_playback_id = mux_stream.data.playback_ids[0].id
+                event.save()
             
-            # Save stream info
-            event.mux_stream_key = mux_stream.data.stream_key
-            event.mux_playback_id = mux_stream.data.playback_ids[0].id
-            event.save()
-            
-            messages.success(request, f"Event '{event.title}' created successfully.")
+            messages.success(request, f"{'Live event' if event.is_live else 'Conversation'} '{event.title}' created successfully.")
             return redirect('event_detail', event_id=event.id)
     else:
         form = EventForm()
@@ -318,45 +317,34 @@ def create_event(request):
     return render(request, 'create_event.html', {'form': form})
 
 @login_required
-def create_conversation(request, event_id=None):
+def create_conversation(request):
     if not hasattr(request.user, 'profile') or not request.user.profile.is_organizer:
         return render(request, 'not_authorized.html')
     
-    if event_id:
-        event = get_object_or_404(Event, id=event_id, organizer=request.user)
-    else:
-        # Create a new Event for the conversation
-        event = Event(organizer=request.user, is_live=False)
-    
     if request.method == 'POST':
-        form = ConversationForm(request.POST)
+        form = EventForm(request.POST, request.FILES)
         if form.is_valid():
-            conversation = form.save(commit=False)
-            if not event_id:
-                # Create new Event with start_time from form or current time
-                event_form = EventForm(request.POST)
-                if event_form.is_valid():
-                    event.title = event_form.cleaned_data['title']
-                    start_time = event_form.cleaned_data['start_time']
-                    if timezone.is_naive(start_time):
-                        start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
-                    event.start_time = start_time
-                    event.save()
-                    LiveStatus.objects.create(event=event, is_active=True)
-            conversation.event = event
-            conversation.creator = request.user
-            conversation.save()
-            messages.success(request, f"Conversation for '{event.title}' created successfully.")
-            return redirect('conversation_detail', event_id=event.id, conversation_id=conversation.id)
+            event = form.save(commit=False)
+            event.organizer = request.user
+            event.is_live = False  # Force is_live=False for conversations
+            
+            # Ensure start_time is timezone-aware in EAT (Africa/Nairobi)
+            start_time = form.cleaned_data['start_time']
+            if timezone.is_naive(start_time):
+                start_time = timezone.make_aware(start_time, timezone.get_default_timezone())
+            event.start_time = start_time
+            
+            event.save()
+            
+            # Create LiveStatus with is_active=True
+            LiveStatus.objects.create(event=event, is_active=True)
+            
+            messages.success(request, f"Conversation '{event.title}' created successfully.")
+            return redirect('event_detail', event_id=event.id)
     else:
-        form = ConversationForm()
-        event_form = EventForm() if not event_id else None
+        form = EventForm(initial={'is_live': False})
     
-    return render(request, 'create_conversation.html', {
-        'form': form,
-        'event': event,
-        'event_form': event_form,
-    })
+    return render(request, 'create_conversation.html', {'form': form})
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
