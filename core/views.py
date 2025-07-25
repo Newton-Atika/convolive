@@ -6,7 +6,6 @@ from django.contrib.auth.models import User
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from .forms import EventForm, CustomUserCreationForm
-from .models import Event, LiveStatus,Gift
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
@@ -15,15 +14,25 @@ from mux_python.rest import ApiException
 from mux_python.models.create_asset_request import CreateAssetRequest
 from mux_python.models.create_playback_id_request import CreatePlaybackIDRequest
 from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
-
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
+import uuid
+import requests
+import logging
+from django.db.models import Sum, IntegerField, Count  # Added Count to the import
+from django.db.models.functions import Cast
+from .models import Event, LiveStatus, Gift, Payment, LiveParticipant
+from .forms import EventForm
+from mux_python.models.create_live_stream_request import CreateLiveStreamRequest
+import mux_python
+from django.conf import settings
 configuration = mux_python.Configuration()
 configuration.username = settings.MUX_TOKEN_ID
 configuration.password = settings.MUX_TOKEN_SECRET
 # views.py
-from django.shortcuts import render, redirect, get_object_or_404
 from .forms import EventForm
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
 from django.conf import settings
 
 # Mux SDK imports
@@ -41,10 +50,6 @@ from .utils.mux import mux_api
 
 from django.http import JsonResponse
 from .utils.livekit_utils import create_token
-# views.py
-
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 import hmac
 import hashlib
