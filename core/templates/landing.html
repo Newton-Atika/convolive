@@ -65,6 +65,29 @@
         .container {
             padding: 2rem 1rem;
         }
+        .search-form {
+            margin: 1rem 0;
+            text-align: center;
+        }
+        .search-input {
+            padding: 0.5rem;
+            width: 70%;
+            max-width: 400px;
+            border: 2px solid limegreen;
+            border-radius: 5px;
+            background-color: white;
+            color: #000;
+            font-size: 1rem;
+        }
+        .search-button {
+            padding: 0.5rem 1rem;
+            background-color: limegreen;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
         .tabs-container {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -126,7 +149,7 @@
         .join-btn {
             display: block;
             margin-top: 0.3rem;
-            background: #0f0;
+            background: limegreen;
             color: #000;
             padding: 0.3rem 0.6rem;
             border-radius: 5px;
@@ -139,6 +162,14 @@
             border: none;
             border-top: 1px solid #fff;
             margin: 1rem 0;
+        }
+        .no-events {
+            text-align: center;
+            color: #ccc;
+        }
+        /* Hide events that don't match search */
+        .event-card.hidden {
+            display: none;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -174,6 +205,9 @@
             .event-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
+            .search-input {
+                width: 60%;
+            }
         }
         @media (max-width: 768px) {
             .navbar {
@@ -208,11 +242,19 @@
             {% endif %}
         </div>
     </nav>
+
     <header class="welcome-section">
         <h1>Welcome to the Future of Live Engagement</h1>
         <p>Join live sessions, engaging conversations, or catch up on upcoming events!</p>
     </header>
+
     <div class="container">
+        <!-- Search Form -->
+        <div class="search-form">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search events or organizers...">
+            <button class="search-button" onclick="searchEvents()">Search</button>
+        </div>
+
         <div class="tabs-container">
             <div class="tabs">
                 <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives Now</button>
@@ -220,55 +262,61 @@
                 <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
             </div>
         </div>
+
         <div id="lives" class="tab-content active">
-            {% if lives_now %}
-                <div class="event-grid">
+            <div class="event-grid" id="livesGrid">
+                {% if lives_now %}
                     {% for event in lives_now %}
-                        <div class="event-card">
+                        <div class="event-card" data-title="{{ event.title|lower|escapejs }}" data-organizer="{{ event.organizer.username|lower|escapejs }}">
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
-                            <p><strong>Started:</strong> {{ event.start_time }}</p>
+                            <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
                             <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
-                </div>
-            {% else %}
-                <p>No live events now.</p>
-            {% endif %}
+                {% else %}
+                    <p class="no-events">No live events now.</p>
+                {% endif %}
+            </div>
         </div>
+
         <div id="conversations" class="tab-content">
-            {% if conversations_now %}
-                <div class="event-grid">
+            <div class="event-grid" id="conversationsGrid">
+                {% if conversations_now %}
                     {% for event in conversations_now %}
-                        <div class="event-card">
+                        <div class="event-card" data-title="{{ event.title|lower|escapejs }}" data-organizer="{{ event.organizer.username|lower|escapejs }}">
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
-                            <p><strong>Started:</strong> {{ event.start_time }}</p>
+                            <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
                             <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
-                </div>
-            {% else %}
-                <p>No conversations happening now.</p>
-            {% endif %}
+                {% else %}
+                    <p class="no-events">No conversations happening now.</p>
+                {% endif %}
+            </div>
         </div>
+
         <hr class="divider">
+
         <div id="upcoming" class="tab-content">
-            {% if upcoming %}
-                <div class="event-grid">
+            <div class="event-grid" id="upcomingGrid">
+                {% if upcoming %}
                     {% for event in upcoming %}
-                        <div class="event-card">
+                        <div class="event-card" data-title="{{ event.title|lower|escapejs }}" data-organizer="{{ event.organizer.username|lower|escapejs }}">
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
-                            <p><strong>Starts:</strong> {{ event.start_time }}</p>
+                            <p><strong>Starts:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
+                            <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
-                </div>
-            {% else %}
-                <p>No upcoming events in the next hour.</p>
-            {% endif %}
+                {% else %}
+                    <p class="no-events">No upcoming events in the next hour.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
+
     <script>
         function openTab(evt, tabId) {
             const tabs = document.querySelectorAll(".tab-content");
@@ -277,7 +325,58 @@
             buttons.forEach(btn => btn.classList.remove("active"));
             document.getElementById(tabId).classList.add("active");
             evt.currentTarget.classList.add("active");
+            // Reset search when switching tabs
+            document.getElementById('searchInput').value = '';
+            searchEvents();
         }
+
+        function searchEvents() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            const grids = [
+                { id: 'livesGrid', noEventsMsg: 'No live events now.' },
+                { id: 'conversationsGrid', noEventsMsg: 'No conversations happening now.' },
+                { id: 'upcomingGrid', noEventsMsg: 'No upcoming events in the next hour.' }
+            ];
+
+            grids.forEach(grid => {
+                const eventGrid = document.getElementById(grid.id);
+                if (!eventGrid) return;
+
+                const events = eventGrid.querySelectorAll('.event-card');
+                let visibleCount = 0;
+
+                events.forEach(event => {
+                    const title = event.getAttribute('data-title');
+                    const organizer = event.getAttribute('data-organizer');
+                    const matches = title.includes(query) || organizer.includes(query);
+                    event.classList.toggle('hidden', !matches);
+                    if (matches) visibleCount++;
+                });
+
+                // Update no-events message
+                let noEventsEl = eventGrid.querySelector('.no-events');
+                if (visibleCount === 0 && !noEventsEl) {
+                    noEventsEl = document.createElement('p');
+                    noEventsEl.className = 'no-events';
+                    noEventsEl.textContent = query ? 'No events found.' : grid.noEventsMsg;
+                    eventGrid.appendChild(noEventsEl);
+                } else if (visibleCount > 0 && noEventsEl) {
+                    noEventsEl.remove();
+                } else if (noEventsEl && query) {
+                    noEventsEl.textContent = 'No events found.';
+                } else if (noEventsEl && !query) {
+                    noEventsEl.textContent = grid.noEventsMsg;
+                }
+            });
+        }
+
+        // Trigger search on Enter key or input change
+        document.getElementById('searchInput').addEventListener('input', searchEvents);
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchEvents();
+            }
+        });
     </script>
 </body>
 </html>
