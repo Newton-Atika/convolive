@@ -339,7 +339,9 @@ def join_event(request, event_id):
     # Conversations require payment, live events do not
     has_paid = False
     if not event.is_live:
-        has_paid = Payment.objects.filter(user=request.user, event=event, verified=True).exists()
+        payment_query = Payment.objects.filter(user=request.user, event=event, verified=True)
+        has_paid = payment_query.exists()
+        logger.debug(f"Payment check for user {request.user.id}, event {event.id}: has_paid={has_paid}, payments={list(payment_query.values('reference', 'verified', 'created_at'))}")
         if not has_paid:
             logger.info(f"User {request.user.id} needs payment for conversation {event.id}")
             messages.info(request, "Payment of 50 KES is required to join this conversation.")
@@ -362,7 +364,7 @@ def join_event(request, event_id):
 
     return render(request, 'index.html', {
         'event': event,
-        'has_paid': has_paid,  # Consistent with template
+        'has_paid': has_paid,
         'participants': participants,
         'participant_count': participant_count,
         'is_organizer': 'true' if is_organizer else 'false',
