@@ -223,14 +223,8 @@
             margin-top: 1rem;
         }
         @keyframes popIn {
-            from {
-                transform: scale(0.8);
-                opacity: 0;
-            }
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -310,17 +304,14 @@
             <button onclick="openAbout()">About</button>
         </div>
     </nav>
-
     <header class="welcome-section">
         <h1>Welcome to the Future of Live Engagement</h1>
         <p>Join live sessions, engaging conversations, or catch up on upcoming events!</p>
-        <!-- Search Form -->
         <div class="search-form">
             <input type="text" id="searchInput" class="search-input" placeholder="Search events or organizers...">
             <button class="search-button" onclick="searchEvents()">Search</button>
         </div>
     </header>
-
     <div class="container">
         <div class="tabs-container">
             <div class="tabs">
@@ -329,7 +320,6 @@
                 <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
             </div>
         </div>
-
         <div id="lives" class="tab-content active">
             <div class="event-grid" id="livesGrid">
                 {% if lives_now %}
@@ -338,6 +328,8 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
+                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
+                            <p>❤️ Likes: {{ event.like_count }}</p>
                             <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
@@ -346,7 +338,6 @@
                 {% endif %}
             </div>
         </div>
-
         <div id="conversations" class="tab-content">
             <div class="event-grid" id="conversationsGrid">
                 {% if conversations_now %}
@@ -355,6 +346,8 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
+                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
+                            <p>❤️ Likes: {{ event.like_count }}</p>
                             <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
@@ -363,9 +356,7 @@
                 {% endif %}
             </div>
         </div>
-
         <hr class="divider">
-
         <div id="upcoming" class="tab-content">
             <div class="event-grid" id="upcomingGrid">
                 {% if upcoming %}
@@ -374,6 +365,8 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Starts:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
+                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
+                            <p>❤️ Likes: {{ event.like_count }}</p>
                             <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                         </div>
                     {% endfor %}
@@ -382,14 +375,10 @@
                 {% endif %}
             </div>
         </div>
-
-        <!-- Contact Section -->
         <div class="contact-section">
             <p>Contact us: <a href="tel:+254745770557" class="contact-link">+254 745 770557</a> (Call or WhatsApp)</p>
         </div>
     </div>
-
-    <!-- About Popup -->
     <div id="aboutModal" class="about-modal">
         <div class="about-content">
             <h2>About LiveStream</h2>
@@ -400,7 +389,6 @@
             <button class="close-btn" onclick="closeAbout()">Close</button>
         </div>
     </div>
-
     <script>
         function openTab(evt, tabId) {
             const tabs = document.querySelectorAll(".tab-content");
@@ -409,7 +397,6 @@
             buttons.forEach(btn => btn.classList.remove("active"));
             document.getElementById(tabId).classList.add("active");
             evt.currentTarget.classList.add("active");
-            // Reset search when switching tabs
             document.getElementById('searchInput').value = '';
             searchEvents();
         }
@@ -421,14 +408,11 @@
                 { id: 'conversationsGrid', noEventsMsg: 'No conversations happening now.' },
                 { id: 'upcomingGrid', noEventsMsg: 'No upcoming events in the next hour.' }
             ];
-
             grids.forEach(grid => {
                 const eventGrid = document.getElementById(grid.id);
                 if (!eventGrid) return;
-
                 const events = eventGrid.querySelectorAll('.event-card');
                 let visibleCount = 0;
-
                 events.forEach(event => {
                     const title = event.getAttribute('data-title');
                     const organizer = event.getAttribute('data-organizer');
@@ -436,7 +420,6 @@
                     event.classList.toggle('hidden', !matches);
                     if (matches) visibleCount++;
                 });
-
                 let noEventsEl = eventGrid.querySelector('.no-events');
                 if (visibleCount === 0 && !noEventsEl) {
                     noEventsEl = document.createElement('p');
@@ -461,7 +444,6 @@
             document.getElementById('aboutModal').style.display = 'none';
         }
 
-        // Trigger search on input change or Enter key
         document.getElementById('searchInput').addEventListener('input', searchEvents);
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
