@@ -170,19 +170,70 @@
     </style>
 </head>
 <body>
-{% if not event.is_live and not user_has_paid %}
-    <div class="payment-warning">
-        ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
-        <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
-    </div>
+{% if not event.is_live %}
+    {% if not has_paid %}
+        <div class="payment-warning">
+            ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
+            <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
+        </div>
+    {% else %}
+        <div class="container">
+            <h1>🎥 {{ event.title }}</h1>
+            <div class="video-box">
+                <!-- Agora video area -->
+                <div id="agora-video">
+                    <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
+                    <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
+                </div>
+                {% if user.pk == event.organizer.pk %}
+                    <form method="post" action="{% url 'end_event' event.id %}">
+                        {% csrf_token %}
+                        <button type="submit" style="background:red;color:white;padding:0.5rem 1rem;margin-top:1rem;">🔴 End Live</button>
+                    </form>
+                {% endif %}
+            </div>
+            <div class="viewer-count">
+                {% if user.pk == event.organizer.pk and participants %}
+                    👁️ Viewers: {{ participants|length }}
+                    <div><strong>Joined Participants:</strong>
+                        <ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul>
+                    </div>
+                {% else %}
+                    👁️ Viewers: {{ participant_count }}
+                {% endif %}
+            </div>
+            {% if user.pk == event.organizer.pk %}
+                <div id="micRequests">
+                    <h3>🎤 Mic Requests</h3>
+                    <ul id="requestList"></ul>
+                </div>
+            {% endif %}
+            <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
+            <div class="chat">
+                <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
+                <input type="text" id="messageInput" placeholder="Type message...">
+                <button id="sendBtn">Send</button>
+                <button id="leaveChatBtn">Leave Chat</button>
+                <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
+                    {% csrf_token %}
+                    <select name="amount" id="giftType">
+                        <option value="10">🌹 Rose (10 KES)</option>
+                        <option value="20">🍫 Chocolate (20 KES)</option>
+                        <option value="50">⭐ Star (50 KES)</option>
+                    </select>
+                    <button type="submit" id="sendGiftBtn">Send Gift</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
 {% else %}
     <div class="container">
         <h1>🎥 {{ event.title }}</h1>
         <div class="video-box">
             <!-- Agora video area -->
             <div id="agora-video">
-                <video id="localVideo" autoplay muted playsinline></video>
-                <video id="remoteVideo" autoplay playsinline></video>
+                <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
+                <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
             </div>
             {% if user.pk == event.organizer.pk %}
                 <form method="post" action="{% url 'end_event' event.id %}">
@@ -207,15 +258,7 @@
                 <ul id="requestList"></ul>
             </div>
         {% endif %}
-        <div class="reactions">
-            <button class="reaction-btn" data-emoji="❤️" data-is-heart="true">❤️ Like (<span id="likeCount">0</span>)</button>
-            <button class="reaction-btn" data-emoji="😂">😂</button>
-            <button class="reaction-btn" data-emoji="🤣">🤣</button>
-            <button class="reaction-btn" data-emoji="😅">😅</button>
-            <button class="reaction-btn" data-emoji="🥰">🥰</button>
-            <button class="reaction-btn" data-emoji="😱">😱</button>
-            <button class="reaction-btn" data-emoji="💔">💔</button>
-        </div>
+        <button id="likeBtn">❤️ Like (<span id="likeCount">0</span>)</button>
         <div class="chat">
             <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
             <input type="text" id="messageInput" placeholder="Type message...">
@@ -224,9 +267,9 @@
             <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
                 {% csrf_token %}
                 <select name="amount" id="giftType">
-                    <option value="10">🌹 Rose (10 KES)</option>
-                    <option value="20">🍫 Chocolate (20 KES)</option>
-                    <option value="50">⭐ Star (50 KES)</option>
+                    <option value="10">🌹 Rose (10 KES)</option>
+                    <option value="20">🍫 Chocolate (20 KES)</option>
+                    <option value="50">⭐ Star (50 KES)</option>
                 </select>
                 <button type="submit" id="sendGiftBtn">Send Gift</button>
             </form>
