@@ -434,6 +434,7 @@ from django.contrib import messages
 from django.conf import settings
 import requests
 import logging
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -445,16 +446,15 @@ def verify_payment(request):
 
     payment = get_object_or_404(Payment, reference=reference)
     headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-
     try:
         url = f"https://api.paystack.co/transaction/verify/{reference}"
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         res_data = response.json()
-
         if res_data.get('status') and res_data.get('data', {}).get('status') == 'success':
-            payment.verified = True
-            payment.save()
+            with transaction.atomic():
+                payment.verified = True
+                payment.save()
             logger.info(f"Payment verified for user {payment.user.id}, conversation {payment.event.id}, reference {reference}")
             messages.success(request, "Payment verified successfully. You can now join the conversation.")
             return redirect('join_event', event_id=payment.event.id)
@@ -462,7 +462,6 @@ def verify_payment(request):
             logger.error(f"Payment verification failed for reference {reference}: {res_data}")
             messages.error(request, "Payment verification failed. Please contact support.")
             return redirect('event_detail', event_id=payment.event.id)
-
     except requests.RequestException as e:
         logger.error(f"Paystack verification error for reference {reference}: {str(e)}")
         messages.error(request, "Error verifying payment. Please try again or contact support.")
