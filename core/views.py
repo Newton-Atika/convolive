@@ -194,9 +194,32 @@ def landing_page(request):
     now = timezone.now()
     next_hour = now + timedelta(hours=1)
     
-    lives_now = Event.objects.filter(is_live=True, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
-    conversations_now = Event.objects.filter(is_live=False, start_time__lte=now, livestatus__is_active=True).select_related('organizer')
-    upcoming = Event.objects.filter(start_time__gt=now, start_time__lte=next_hour, livestatus__is_active=True).select_related('organizer')
+    lives_now = Event.objects.filter(
+        is_live=True,
+        start_time__lte=now,
+        livestatus__is_active=True
+    ).select_related('organizer').annotate(
+        viewer_count=Count('liveparticipant'),
+        like_count=Count('eventlike')
+    )
+    
+    conversations_now = Event.objects.filter(
+        is_live=False,
+        start_time__lte=now,
+        livestatus__is_active=True
+    ).select_related('organizer').annotate(
+        viewer_count=Count('liveparticipant'),
+        like_count=Count('eventlike')
+    )
+    
+    upcoming = Event.objects.filter(
+        start_time__gt=now,
+        start_time__lte=next_hour,
+        livestatus__is_active=True
+    ).select_related('organizer').annotate(
+        viewer_count=Count('liveparticipant'),
+        like_count=Count('eventlike')
+    )
     
     return render(request, 'landing.html', {
         'lives_now': lives_now,
