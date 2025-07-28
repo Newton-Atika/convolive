@@ -68,14 +68,15 @@
         .tab {
             display: flex;
             align-items: center;
-            background-color: #222;
+            background-color: #fff;
+            color: #000;
             padding: 0.5rem 1rem;
             border-radius: 5px;
             cursor: pointer;
             font-size: 0.9rem;
         }
         .tab:hover {
-            background-color: #333;
+            background-color: #e0e0e0;
         }
         .tab span {
             margin-left: 0.3rem;
@@ -139,9 +140,15 @@
             font-weight: bold;
         }
         #leaveChatBtn {
-            background-color: #444;
-            color: #fff;
-            font-weight: bold;
+            background-color: #fff;
+            color: #000;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        #leaveChatBtn:hover {
+            background-color: #e0e0e0;
         }
         .reaction-btn {
             background-color: #000;
@@ -224,9 +231,10 @@
                 {% if user.pk == event.organizer.pk %}
                     <form method="post" action="{% url 'end_event' event.id %}">
                         {% csrf_token %}
-                        <button type="submit" id="endLiveBtn">🔴 End Live</button>
+                        <button type="submit" id="endLiveBtn" class="tab">🔴 End Live</button>
                     </form>
                 {% endif %}
+                <button id="leaveChatBtn" class="tab">🔴 Leave Live</button>
             </div>
             <div id="reactions" class="tab-content">
                 <div class="reaction-buttons">
@@ -255,7 +263,6 @@
                 <div class="chat-input-container">
                     <input type="text" id="messageInput" placeholder="Type message...">
                     <button id="sendBtn">Send</button>
-                    <button id="leaveChatBtn">Leave Live</button>
                 </div>
             </div>
             <div class="viewer-count">
@@ -268,12 +275,6 @@
                     👁️ Viewers: {{ participant_count }}
                 {% endif %}
             </div>
-            {% if user.pk == event.organizer.pk %}
-                <div id="micRequests">
-                    <h3>🎤 Mic Requests</h3>
-                    <ul id="requestList"></ul>
-                </div>
-            {% endif %}
         </div>
     {% endif %}
     <script>
@@ -299,9 +300,8 @@
             socket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${CHANNEL}/`);
             socket.onopen = () => {
                 console.log("✅ Stream WebSocket connected");
-                if (isOrganizer && eventIsLive) {
+                if (isOrganizer) {
                     socket.send(JSON.stringify({ type: "live_started" }));
-                    initAgora();
                 }
             };
             socket.onmessage = (event) => {
@@ -327,10 +327,9 @@
                 } else if (data.type === "mic_request" && isOrganizer) {
                     const li = document.createElement("li");
                     li.id = `mic-${data.username}`;
-                    li.innerHTML = `${data.username} requests mic
-                        <button onclick="approveMic('${data.username}')">✅</button>
+                    li.innerHTML = `<button onclick="approveMic('${data.username}')">✅</button>
                         <button onclick="denyMic('${data.username}')">❌</button>`;
-                    document.getElementById("requestList").appendChild(li);
+                    document.getElementById("requestList")?.appendChild(li);
                 } else if (data.type === "mic_approved") {
                     if (!isOrganizer && data.username === user) {
                         navigator.mediaDevices.getUserMedia({ audio: true, video: true })
@@ -485,9 +484,7 @@
 
         window.onload = () => {
             initializeWebSockets();
-            if (isOrganizer || eventIsLive) {
-                initAgora();
-            }
+            initAgora(); // Initialize for all users with access
             const tabs = document.querySelectorAll(".tab");
             const tabContents = document.querySelectorAll(".tab-content");
             tabs.forEach(tab => {
@@ -495,8 +492,10 @@
                     tabContents.forEach(content => content.classList.remove("active"));
                     tabs.forEach(t => t.classList.remove("active"));
                     const target = tab.getAttribute("data-target");
-                    document.getElementById(target).classList.add("active");
-                    tab.classList.add("active");
+                    if (target) {
+                        document.getElementById(target).classList.add("active");
+                        tab.classList.add("active");
+                    }
                 });
             });
             document.getElementById("reactions").classList.add("active");
