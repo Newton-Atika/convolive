@@ -28,16 +28,16 @@ h1 {
 .video-box {
     width: 100%;
     background-color: #111;
-    padding: 0.5rem;
     border-radius: 8px;
     text-align: center;
     border: 2px solid #333;
     flex: 0 0 75vh;
+    overflow: hidden;
 }
 #agora-video {
     width: 100%;
     height: 100%;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 2px solid limegreen;
     overflow: hidden;
     position: relative;
@@ -49,6 +49,7 @@ h1 {
     position: absolute;
     top: 0;
     left: 0;
+    margin: 0;
 }
 #localVideo, #remoteVideo {
     display: none;
@@ -445,6 +446,8 @@ function initializeWebSockets() {
             alert("🔇 Your mic/video access was revoked.");
         }
     };
+    chatSocket.onerror = (error) => console.error("❌ Chat WebSocket error:", error);
+    chatSocket.onclose = (event) => console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
     likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
     likeSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -464,6 +467,8 @@ function initializeWebSockets() {
             document.getElementById("videoPlaceholder")?.remove();
         }
     };
+    likeSocket.onerror = (error) => console.error("❌ Like WebSocket error:", error);
+    likeSocket.onclose = (event) => console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
 }
 async function initAgora() {
     try {
@@ -526,8 +531,8 @@ function leaveChat() {
         if (rtc.localVideoTrack) rtc.localVideoTrack.close();
     }
     if (socket && socket.readyState === WebSocket.OPEN) socket.close();
-    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) chatSocket.close();
-    if (likeSocket && likeSocket.readyState === WebSocket.OPEN) likeSocket.close();
+    if (chatSocket && socket.readyState === WebSocket.OPEN) chatSocket.close();
+    if (likeSocket && socket.readyState === WebSocket.OPEN) likeSocket.close();
 }
 function floatEmoji(content, isHeart = false) {
     const el = document.createElement("div");
@@ -604,13 +609,15 @@ window.onload = () => {
 };
 document.getElementById("sendBtn").onclick = () => {
     const msg = document.getElementById("messageInput").value.trim();
-    if (msg && chatSocket.readyState === WebSocket.OPEN) {
+    if (msg && chatSocket && chatSocket.readyState === WebSocket.OPEN) {
         chatSocket.send(JSON.stringify({ type: "message", message: msg }));
         document.getElementById("messageInput").value = "";
     }
 };
 document.getElementById("messageInput").addEventListener("keypress", (e) => {
-    if (e.key === "Enter") document.getElementById("sendBtn").click();
+    if (e.key === "Enter") {
+        document.getElementById("sendBtn").click();
+    }
 });
 document.getElementById("leaveChatBtn").onclick = () => {
     leaveChat();
@@ -619,8 +626,10 @@ document.getElementById("leaveChatBtn").onclick = () => {
 const micBtn = document.getElementById("requestMicBtn");
 if (micBtn) {
     micBtn.onclick = () => {
-        chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-        alert("🎤 Mic request sent to organizer.");
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+            alert("🎤 Mic request sent to organizer.");
+        }
     };
 }
 </script>
