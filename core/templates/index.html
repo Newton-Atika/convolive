@@ -317,7 +317,11 @@
                 }
             };
             socket.onerror = (error) => console.error("❌ Stream WebSocket error:", error);
-            socket.onclose = (event) => console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            socket.onclose = (event) => {
+                console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                setTimeout(() => initializeWebSockets(), 3000); // Retry after 3 seconds
+            };
+
             chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
             chatSocket.onopen = () => {
                 console.log("✅ Chat WebSocket connected");
@@ -367,8 +371,17 @@
                     alert("🔇 Your mic/video access was revoked.");
                 }
             };
-            chatSocket.onerror = (error) => console.error("❌ Chat WebSocket error:", error);
-            chatSocket.onclose = (event) => console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            chatSocket.onerror = (error) => {
+                console.error("❌ Chat WebSocket error:", error);
+            };
+            chatSocket.onclose = (event) => {
+                console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                setTimeout(() => {
+                    chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
+                    console.log("🔄 Attempting to reconnect Chat WebSocket");
+                }, 3000);
+            };
+
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
             likeSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -388,6 +401,11 @@
                     document.getElementById("videoPlaceholder")?.remove();
                     initAgora();
                 }
+            };
+            likeSocket.onerror = (error) => console.error("❌ Like WebSocket error:", error);
+            likeSocket.onclose = (event) => {
+                console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                setTimeout(() => initializeWebSockets(), 3000);
             };
         }
 
@@ -481,15 +499,78 @@
         }
 
         function approveMic(username) {
-            chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+            }
         }
 
         function denyMic(username) {
-            chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+            }
         }
 
         function revokeMic(username) {
-            chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+            }
+        }
+
+        function reconnectChatSocket() {
+            if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+                chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
+                chatSocket.onopen = () => console.log("✅ Chat WebSocket reconnected");
+                chatSocket.onerror = (error) => console.error("❌ Chat WebSocket error:", error);
+                chatSocket.onclose = (event) => {
+                    console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                    setTimeout(reconnectChatSocket, 3000);
+                };
+                chatSocket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    const chatArea = document.getElementById("chatArea");
+                    if (data.type === "chat") {
+                        const p = document.createElement("p");
+                        const isOwnMessage = data.username === user;
+                        p.className = isOwnMessage ? "own-message" : "";
+                        p.innerHTML = `<strong>@${data.username}</strong>: ${data.message}`;
+                        chatArea.appendChild(p);
+                        chatArea.scrollTop = chatArea.scrollHeight;
+                    } else if (data.type === "mic_request" && isOrganizer) {
+                        const li = document.createElement("li");
+                        li.id = `mic-${data.username}`;
+                        li.innerHTML = `<button onclick="approveMic('${data.username}')">✅</button>
+                            <button onclick="denyMic('${data.username}')">❌</button>`;
+                        document.getElementById("requestList")?.appendChild(li);
+                    } else if (data.type === "mic_approved") {
+                        if (!isOrganizer && data.username === user) {
+                            navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+                                .then(stream => {
+                                    localMicStream = stream;
+                                    const video = document.getElementById("remoteVideo");
+                                    video.srcObject = stream;
+                                    video.style.display = "block";
+                                    floatEmoji("🎤🎥 You are live!", false);
+                                })
+                                .catch(err => {
+                                    console.error("Media access error:", err);
+                                    alert("Could not access camera/microphone.");
+                                });
+                        } else {
+                            document.getElementById(`mic-${data.username}`)?.remove();
+                        }
+                    } else if (data.type === "mic_denied") {
+                        if (data.username === user) alert("❌ Your mic request was denied.");
+                        document.getElementById(`mic-${data.username}`)?.remove();
+                    } else if (data.type === "mic_revoked" && data.username === user) {
+                        if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+                        localMicStream = null;
+                        const video = document.getElementById("remoteVideo");
+                        video.srcObject = null;
+                        video.style.display = "none";
+                        alert("🔇 Your mic/video access was revoked.");
+                    }
+                };
+            }
         }
 
         window.onload = () => {
@@ -541,12 +622,15 @@
 
         document.getElementById("sendBtn").onclick = () => {
             const msg = document.getElementById("messageInput").value.trim();
-            if (msg && chatSocket.readyState === WebSocket.OPEN) {
-                chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-                document.getElementById("messageInput").value = "";
-            } else if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
-                console.error("Chat WebSocket not connected");
-                alert("Cannot send message: WebSocket not connected.");
+            if (msg) {
+                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+                    document.getElementById("messageInput").value = "";
+                } else {
+                    console.error("Chat WebSocket not connected, attempting to reconnect");
+                    alert("WebSocket not connected, attempting to reconnect...");
+                    reconnectChatSocket();
+                }
             }
         };
 
@@ -562,8 +646,13 @@
         const micBtn = document.getElementById("requestMicBtn");
         if (micBtn) {
             micBtn.onclick = () => {
-                chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-                alert("🎤 Mic request sent to organizer.");
+                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+                    alert("🎤 Mic request sent to organizer.");
+                } else {
+                    console.error("Chat WebSocket not connected for mic request");
+                    alert("Cannot send mic request: WebSocket not connected.");
+                }
             };
         }
     </script>
