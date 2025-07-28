@@ -78,6 +78,10 @@
         .tab:hover {
             background-color: #e0e0e0;
         }
+        .tab.active {
+            background-color: #666;
+            color: #fff;
+        }
         .tab span {
             margin-left: 0.3rem;
         }
@@ -282,6 +286,7 @@
         const CHANNEL = '{{ event.id|escapejs }}';
         const isOrganizer = {{ is_organizer|safe }};
         const eventIsLive = {{ event.is_live|lower|safe }};
+        const hasPaid = {{ has_paid|lower|safe }};
         const user = "{{ request.user.username|escapejs }}";
         const eventId = "{{ event.id|escapejs }}";
         const wsScheme = location.protocol === "https:" ? "wss" : "ws";
@@ -314,6 +319,9 @@
             socket.onerror = (error) => console.error("❌ Stream WebSocket error:", error);
             socket.onclose = (event) => console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
             chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
+            chatSocket.onopen = () => {
+                console.log("✅ Chat WebSocket connected");
+            };
             chatSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 const chatArea = document.getElementById("chatArea");
@@ -359,6 +367,8 @@
                     alert("🔇 Your mic/video access was revoked.");
                 }
             };
+            chatSocket.onerror = (error) => console.error("❌ Chat WebSocket error:", error);
+            chatSocket.onclose = (event) => console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
             likeSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -484,7 +494,9 @@
 
         window.onload = () => {
             initializeWebSockets();
-            initAgora(); // Initialize for all users with access
+            if (isOrganizer || eventIsLive || hasPaid) {
+                initAgora();
+            }
             const tabs = document.querySelectorAll(".tab");
             const tabContents = document.querySelectorAll(".tab-content");
             tabs.forEach(tab => {
@@ -532,6 +544,9 @@
             if (msg && chatSocket.readyState === WebSocket.OPEN) {
                 chatSocket.send(JSON.stringify({ type: "message", message: msg }));
                 document.getElementById("messageInput").value = "";
+            } else if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+                console.error("Chat WebSocket not connected");
+                alert("Cannot send message: WebSocket not connected.");
             }
         };
 
