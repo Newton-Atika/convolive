@@ -319,15 +319,16 @@
             socket.onerror = (error) => console.error("❌ Stream WebSocket error:", error);
             socket.onclose = (event) => {
                 console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(() => initializeWebSockets(), 3000); // Retry after 3 seconds
+                setTimeout(() => initializeWebSockets(), 3000);
             };
 
             chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
             chatSocket.onopen = () => {
-                console.log("✅ Chat WebSocket connected");
+                console.log(`✅ Chat WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
             };
             chatSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log("📩 Chat WebSocket message:", data);
                 const chatArea = document.getElementById("chatArea");
                 if (data.type === "chat") {
                     const p = document.createElement("p");
@@ -376,13 +377,13 @@
             };
             chatSocket.onclose = (event) => {
                 console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(() => {
-                    chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
-                    console.log("🔄 Attempting to reconnect Chat WebSocket");
-                }, 3000);
+                setTimeout(reconnectChatSocket, 3000);
             };
 
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
+            likeSocket.onopen = () => {
+                console.log("✅ Like WebSocket connected");
+            };
             likeSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === "like_update") {
@@ -501,32 +502,50 @@
         function approveMic(username) {
             if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                 chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+            } else {
+                console.error("Chat WebSocket not connected for mic approval");
+                alert("Cannot approve mic: WebSocket not connected.");
             }
         }
 
         function denyMic(username) {
             if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                 chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+            } else {
+                console.error("Chat WebSocket not connected for mic denial");
+                alert("Cannot deny mic: WebSocket not connected.");
             }
         }
 
         function revokeMic(username) {
             if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                 chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+            } else {
+                console.error("Chat WebSocket not connected for mic revocation");
+                alert("Cannot revoke mic: WebSocket not connected.");
             }
         }
 
-        function reconnectChatSocket() {
-            if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+        function reconnectChatSocket(callback) {
+            let attempts = 0;
+            const maxAttempts = 3;
+            const retryInterval = 3000;
+
+            function tryConnect() {
+                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                    console.log("✅ Chat WebSocket already connected");
+                    if (callback) callback();
+                    return;
+                }
+
                 chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
-                chatSocket.onopen = () => console.log("✅ Chat WebSocket reconnected");
-                chatSocket.onerror = (error) => console.error("❌ Chat WebSocket error:", error);
-                chatSocket.onclose = (event) => {
-                    console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                    setTimeout(reconnectChatSocket, 3000);
+                chatSocket.onopen = () => {
+                    console.log(`✅ Chat WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
+                    if (callback) callback();
                 };
                 chatSocket.onmessage = (event) => {
                     const data = JSON.parse(event.data);
+                    console.log("📩 Chat WebSocket message:", data);
                     const chatArea = document.getElementById("chatArea");
                     if (data.type === "chat") {
                         const p = document.createElement("p");
@@ -570,7 +589,30 @@
                         alert("🔇 Your mic/video access was revoked.");
                     }
                 };
+                chatSocket.onerror = (error) => {
+                    console.error("❌ Chat WebSocket error:", error);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
+                        setTimeout(tryConnect, retryInterval);
+                    } else {
+                        console.error("❌ Max retry attempts reached for Chat WebSocket");
+                        alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                    }
+                };
+                chatSocket.onclose = (event) => {
+                    console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
+                        setTimeout(tryConnect, retryInterval);
+                    } else {
+                        console.error("❌ Max retry attempts reached for Chat WebSocket");
+                        alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                    }
+                };
             }
+            tryConnect();
         }
 
         window.onload = () => {
@@ -626,10 +668,20 @@
                 if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                     chatSocket.send(JSON.stringify({ type: "message", message: msg }));
                     document.getElementById("messageInput").value = "";
+                    console.log(`📤 Sent message: ${msg}`);
                 } else {
                     console.error("Chat WebSocket not connected, attempting to reconnect");
                     alert("WebSocket not connected, attempting to reconnect...");
-                    reconnectChatSocket();
+                    reconnectChatSocket(() => {
+                        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                            chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+                            document.getElementById("messageInput").value = "";
+                            console.log(`📤 Sent message after reconnect: ${msg}`);
+                        } else {
+                            console.error("Failed to reconnect Chat WebSocket");
+                            alert("Failed to send message: Unable to reconnect to chat.");
+                        }
+                    });
                 }
             }
         };
