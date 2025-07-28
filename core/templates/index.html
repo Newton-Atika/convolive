@@ -317,6 +317,8 @@ function initializeWebSockets() {
         if (data.type === "like_update") {
             document.getElementById("likeCount").innerText = data.total_likes;
             floatEmoji("❤️", true);
+        } else if (data.type === "reaction") {
+            floatEmoji(data.emoji, data.emoji === "❤️");
         } else if (data.type === "gift") {
             const p = document.createElement("p");
             p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
@@ -446,14 +448,22 @@ document.querySelectorAll(".reaction-btn").forEach(btn => {
     btn.onclick = () => {
         const emoji = btn.getAttribute("data-emoji");
         const isHeart = btn.getAttribute("data-is-heart") === "true";
-        if (likeSocket && likeSocket.readyState === WebSocket.OPEN && isHeart) {
-            likeSocket.send(JSON.stringify({
-                type: "like_update",
-                action: liked ? "unlike" : "like",
-                event_id: eventId
-            }));
-            liked = !liked;
-            btn.classList.toggle("liked", liked);
+        if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
+            if (isHeart) {
+                likeSocket.send(JSON.stringify({
+                    type: "like_update",
+                    action: liked ? "unlike" : "like",
+                    event_id: eventId
+                }));
+                liked = !liked;
+                btn.classList.toggle("liked", liked);
+            } else {
+                likeSocket.send(JSON.stringify({
+                    type: "reaction",
+                    emoji: emoji,
+                    event_id: eventId
+                }));
+            }
         }
         floatEmoji(emoji, isHeart);
     };
