@@ -147,7 +147,6 @@ input {
     background-color: #111;
     padding: 0.5rem;
     border-radius: 8px;
-    flex: 1;
 }
 .chat p {
     margin: 0.3rem 0;
@@ -235,17 +234,18 @@ input {
     </div>
     <div class="tab-container">
         {% if user.pk == event.organizer.pk %}
-        <div class="tab active" data-tab="end-live">End Live</div>
+        <div class="tab" data-tab="end-live">End Live</div>
         {% endif %}
-        <div class="tab {% if user.pk != event.organizer.pk %}active{% endif %}" data-tab="gifts">Gifts</div>
+        <div class="tab" data-tab="gifts">Gifts</div>
         <div class="tab" data-tab="reactions">Reactions</div>
+        <div class="tab active" data-tab="chat">Chat</div>
     </div>
-    <div class="tab-content {% if user.pk == event.organizer.pk %}active{% endif %}" id="end-live">
+    <div class="tab-content" id="end-live">
         {% if user.pk == event.organizer.pk %}
         <button id="endLiveBtn">🔴 End Live</button>
         {% endif %}
     </div>
-    <div class="tab-content {% if user.pk != event.organizer.pk %}active{% endif %}" id="gifts">
+    <div class="tab-content" id="gifts">
         <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
             {% csrf_token %}
             <select name="amount" id="giftType">
@@ -267,6 +267,14 @@ input {
             <button class="reaction-btn" data-emoji="💔" data-is-heart="false">💔</button>
         </div>
     </div>
+    <div class="tab-content active" id="chat">
+        <div class="chat">
+            <div id="chatArea"></div>
+            <input type="text" id="messageInput" placeholder="Type message...">
+            <button id="sendBtn">Send</button>
+            <button id="leaveChatBtn">Leave Chat</button>
+        </div>
+    </div>
     <div class="viewer-count">
         {% if user.pk == event.organizer.pk and participants %}
         👁️ Viewers: {{ participants|length }}
@@ -283,12 +291,6 @@ input {
         <ul id="requestList"></ul>
     </div>
     {% endif %}
-    <div class="chat">
-        <div id="chatArea"></div>
-        <input type="text" id="messageInput" placeholder="Type message...">
-        <button id="sendBtn">Send</button>
-        <button id="leaveChatBtn">Leave Chat</button>
-    </div>
 </div>
 {% endif %}
 {% else %}
@@ -302,17 +304,18 @@ input {
     </div>
     <div class="tab-container">
         {% if user.pk == event.organizer.pk %}
-        <div class="tab active" data-tab="end-live">End Live</div>
+        <div class="tab" data-tab="end-live">End Live</div>
         {% endif %}
-        <div class="tab {% if user.pk != event.organizer.pk %}active{% endif %}" data-tab="gifts">Gifts</div>
+        <div class="tab" data-tab="gifts">Gifts</div>
         <div class="tab" data-tab="reactions">Reactions</div>
+        <div class="tab active" data-tab="chat">Chat</div>
     </div>
-    <div class="tab-content {% if user.pk == event.organizer.pk %}active{% endif %}" id="end-live">
+    <div class="tab-content" id="end-live">
         {% if user.pk == event.organizer.pk %}
         <button id="endLiveBtn">🔴 End Live</button>
         {% endif %}
     </div>
-    <div class="tab-content {% if user.pk != event.organizer.pk %}active{% endif %}" id="gifts">
+    <div class="tab-content" id="gifts">
         <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
             {% csrf_token %}
             <select name="amount" id="giftType">
@@ -334,6 +337,14 @@ input {
             <button class="reaction-btn" data-emoji="💔" data-is-heart="false">💔</button>
         </div>
     </div>
+    <div class="tab-content active" id="chat">
+        <div class="chat">
+            <div id="chatArea"></div>
+            <input type="text" id="messageInput" placeholder="Type message...">
+            <button id="sendBtn">Send</button>
+            <button id="leaveChatBtn">Leave Chat</button>
+        </div>
+    </div>
     <div class="viewer-count">
         {% if user.pk == event.organizer.pk and participants %}
         👁️ Viewers: {{ participants|length }}
@@ -350,12 +361,6 @@ input {
         <ul id="requestList"></ul>
     </div>
     {% endif %}
-    <div class="chat">
-        <div id="chatArea"></div>
-        <input type="text" id="messageInput" placeholder="Type message...">
-        <button id="sendBtn">Send</button>
-        <button id="leaveChatBtn">Leave Chat</button>
-    </div>
 </div>
 {% endif %}
 <script>
