@@ -38,7 +38,7 @@ h1 {
     border: 2px solid limegreen;
     overflow: hidden;
     position: relative;
-    background-color: #000; /* Ensure background for video */
+    background-color: #000;
 }
 #agora-video video {
     width: 100%;
@@ -47,20 +47,23 @@ h1 {
     position: absolute;
     top: 0;
     left: 0;
-    display: block; /* Ensure video is visible when active */
+    display: block;
 }
 #localVideo, #remoteVideo {
-    display: none; /* Hidden until stream is active */
+    display: none;
 }
 .tab-bar {
     display: flex;
-    justify-content: flex-start; /* Align left for better spacing */
+    justify-content: flex-start;
     align-items: center;
     background-color: #111;
     padding: 0.5rem;
     border-radius: 8px;
     margin-bottom: 0.5rem;
-    gap: 0.5rem; /* Add spacing between tabs */
+    gap: 0.5rem;
+    overflow-x: auto; /* Enable horizontal scrolling */
+    flex-wrap: nowrap; /* Prevent wrapping */
+    white-space: nowrap; /* Keep tabs in a single line */
 }
 .tab {
     display: flex;
@@ -108,7 +111,7 @@ input, select, button {
     margin: 0.2rem;
 }
 input {
-    width: 70%;
+    width: 80%; /* Increased width for better screen utilization */
     background-color: #222;
     color: #fff;
 }
@@ -123,8 +126,8 @@ input {
 #endLiveBtn {
     background-color: red;
     color: white;
-    padding: 0.4rem 0.8rem; /* Smaller padding */
-    font-size: 0.9rem; /* Smaller font */
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
     font-weight: bold;
 }
 #leaveChatBtn {
@@ -185,7 +188,7 @@ input {
         padding: 0.3rem;
     }
     input {
-        width: 60%;
+        width: 75%;
     }
     .tab {
         padding: 0.4rem 0.8rem;
@@ -244,9 +247,11 @@ input {
     </div>
     <div id="chat" class="tab-content">
         <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
-        <input type="text" id="messageInput" placeholder="Type message...">
-        <button id="sendBtn">Send</button>
-        <button id="leaveChatBtn">Leave Chat</button>
+        <div style="display: flex; gap: 0.2rem;">
+            <input type="text" id="messageInput" placeholder="Type message..." style="flex: 1;">
+            <button id="sendBtn">Send</button>
+            <button id="leaveChatBtn">Leave Chat</button>
+        </div>
     </div>
     <div class="viewer-count">
         {% if user.pk == event.organizer.pk and participants %}
@@ -291,6 +296,7 @@ function initializeWebSockets() {
         console.log("✅ Stream WebSocket connected");
         if (isOrganizer && eventIsLive) {
             socket.send(JSON.stringify({ type: "live_started" }));
+            initAgora(); // Ensure organizer initializes video immediately
         }
     };
     socket.onmessage = (event) => {
@@ -325,12 +331,18 @@ function initializeWebSockets() {
                 navigator.mediaDevices.getUserMedia({ audio: true, video: true })
                     .then(stream => {
                         localMicStream = stream;
-                        const video = document.getElementById("remoteVideo");
+                        const video = document.getElementById("localVideo"); // Use localVideo for user
                         video.srcObject = stream;
                         video.style.display = "block";
                         floatEmoji("🎤🎥 You are live!", false);
+                        if (rtc.localVideoTrack) {
+                            rtc.localVideoTrack.play(video);
+                        }
                     })
-                    .catch(() => alert("Could not access camera/microphone."));
+                    .catch(err => {
+                        console.error("Media access error:", err);
+                        alert("Could not access camera/microphone.");
+                    });
             } else {
                 document.getElementById(`mic-${data.username}`)?.remove();
             }
@@ -340,7 +352,7 @@ function initializeWebSockets() {
         } else if (data.type === "mic_revoked" && data.username === user) {
             if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
             localMicStream = null;
-            const video = document.getElementById("remoteVideo");
+            const video = document.getElementById("localVideo");
             video.srcObject = null;
             video.style.display = "none";
             alert("🔇 Your mic/video access was revoked.");
@@ -363,11 +375,13 @@ function initializeWebSockets() {
             floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
         } else if (data.type === "live_started") {
             document.getElementById("videoPlaceholder")?.remove();
+            initAgora(); // Reinitialize to ensure video displays
         }
     };
 }
 
 async function initAgora() {
+    if (rtc.client) return; // Prevent multiple initializations
     try {
         const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
         if (!response.ok) {
@@ -377,6 +391,7 @@ async function initAgora() {
         const { token, uid, role } = await response.json();
         console.log(`Agora Token: ${token}, UID: ${uid}, Role: ${role}`);
         rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+        await rtc.client.join(APP_ID, CHANNEL, token, uid);
         rtc.client.on("user-published", async (user, mediaType) => {
             try {
                 await rtc.client.subscribe(user, mediaType);
@@ -402,16 +417,20 @@ async function initAgora() {
                 console.log("Remote video unpublished");
             }
         });
-        await rtc.client.join(APP_ID, CHANNEL, token, uid);
-        if (isOrganizer) {
+        if (isOrganizer && eventIsLive) {
             await rtc.client.setClientRole("host");
-            rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-            rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-            const localVideo = document.getElementById("localVideo");
-            rtc.localVideoTrack.play(localVideo);
-            localVideo.style.display = "block";
-            await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-            console.log("Organizer published audio/video tracks");
+            try {
+                rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                const localVideo = document.getElementById("localVideo");
+                rtc.localVideoTrack.play(localVideo);
+                localVideo.style.display = "block";
+                await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+                console.log("Organizer published audio/video tracks");
+            } catch (err) {
+                console.error("Organizer media error:", err);
+                alert("Failed to access camera/microphone for organizer.");
+            }
         } else {
             await rtc.client.setClientRole("audience");
             console.log("Viewer joined as audience");
@@ -464,7 +483,6 @@ function revokeMic(username) {
 
 window.onload = () => {
     initializeWebSockets();
-    initAgora(); // Initialize Agora for all users who have access
     const tabs = document.querySelectorAll(".tab");
     const tabContents = document.querySelectorAll(".tab-content");
     tabs.forEach(tab => {
