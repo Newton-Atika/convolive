@@ -214,12 +214,78 @@
     </style>
 </head>
 <body>
-    {% if not event.is_live and not has_paid %}
-        <div class="payment-warning">
-            ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
-            <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
-        </div>
+    {% if not event.is_live %}
+        {% if has_paid %}
+            <!-- Conversation Event: User has paid -->
+            <div class="container">
+                <h1>🎥 {{ event.title }}</h1>
+                <div class="video-box">
+                    <div id="agora-video">
+                        <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
+                        <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
+                    </div>
+                </div>
+                <div class="tab-bar">
+                    <div class="tab" data-target="reactions">❤️ <span>Reactions</span></div>
+                    <div class="tab" data-target="gifts">🎁 <span>Gifts</span></div>
+                    <div class="tab" data-target="chat">💬 <span>Messages</span></div>
+                    {% if user.pk == event.organizer.pk %}
+                        <form method="post" action="{% url 'end_event' event.id %}">
+                            {% csrf_token %}
+                            <button type="submit" id="endLiveBtn" class="tab">🔴 End Live</button>
+                        </form>
+                    {% endif %}
+                    <button id="leaveChatBtn" class="tab">🔴 Leave Live</button>
+                </div>
+                <div id="reactions" class="tab-content">
+                    <div class="reaction-buttons">
+                        <button id="likeBtn" class="reaction-btn" data-emoji="❤️" data-is-heart="true">❤️ Like (<span id="likeCount">0</span>)</button>
+                        <button class="reaction-btn" data-emoji="😂" data-is-heart="false">😂</button>
+                        <button class="reaction-btn" data-emoji="🤣" data-is-heart="false">🤣</button>
+                        <button class="reaction-btn" data-emoji="😅" data-is-heart="false">😅</button>
+                        <button class="reaction-btn" data-emoji="🥰" data-is-heart="false">🥰</button>
+                        <button class="reaction-btn" data-emoji="😱" data-is-heart="false">😱</button>
+                        <button class="reaction-btn" data-emoji="💔" data-is-heart="false">💔</button>
+                    </div>
+                </div>
+                <div id="gifts" class="tab-content">
+                    <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
+                        {% csrf_token %}
+                        <select name="amount" id="giftType">
+                            <option value="10">🌹 Rose (10 KES)</option>
+                            <option value="20">🍫 Chocolate (20 KES)</option>
+                            <option value="50">⭐ Star (50 KES)</option>
+                        </select>
+                        <button type="submit" id="sendGiftBtn">Send Gift</button>
+                    </form>
+                </div>
+                <div id="chat" class="tab-content">
+                    <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
+                    <div class="chat-input-container">
+                        <input type="text" id="messageInput" placeholder="Type message...">
+                        <button id="sendBtn">Send</button>
+                    </div>
+                </div>
+                <div class="viewer-count">
+                    {% if user.pk == event.organizer.pk and participants %}
+                        👁️ Viewers: {{ participants|length }}
+                        <div><strong>Joined Participants:</strong>
+                            <ul>{% for p in participants %}<li>🟢 {{ p.user.username }}</li>{% endfor %}</ul>
+                        </div>
+                    {% else %}
+                        👁️ Viewers: {{ participant_count }}
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <!-- Conversation Event: User has not paid -->
+            <div class="payment-warning">
+                ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
+                <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
+            </div>
+        {% endif %}
     {% else %}
+        <!-- Live Event: Show everything, no payment required -->
         <div class="container">
             <h1>🎥 {{ event.title }}</h1>
             <div class="video-box">
@@ -616,8 +682,8 @@
         }
 
         window.onload = () => {
-            initializeWebSockets();
             if (isOrganizer || eventIsLive || hasPaid) {
+                initializeWebSockets();
                 initAgora();
             }
             const tabs = document.querySelectorAll(".tab");
@@ -633,8 +699,11 @@
                     }
                 });
             });
-            document.getElementById("reactions").classList.add("active");
-            document.querySelector(".tab[data-target='reactions']").classList.add("active");
+            const reactionsTab = document.querySelector(".tab[data-target='reactions']");
+            if (reactionsTab) {
+                document.getElementById("reactions").classList.add("active");
+                reactionsTab.classList.add("active");
+            }
         };
 
         document.querySelectorAll(".reaction-btn").forEach(btn => {
@@ -662,8 +731,8 @@
             });
         });
 
-        document.getElementById("sendBtn").onclick = () => {
-            const msg = document.getElementById("messageInput").value.trim();
+        document.getElementById("sendBtn")?.addEventListener("click", () => {
+            const msg = document.getElementById("messageInput")?.value.trim();
             if (msg) {
                 if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                     chatSocket.send(JSON.stringify({ type: "message", message: msg }));
@@ -684,20 +753,20 @@
                     });
                 }
             }
-        };
-
-        document.getElementById("messageInput").addEventListener("keypress", (e) => {
-            if (e.key === "Enter") document.getElementById("sendBtn").click();
         });
 
-        document.getElementById("leaveChatBtn").onclick = () => {
+        document.getElementById("messageInput")?.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") document.getElementById("sendBtn")?.click();
+        });
+
+        document.getElementById("leaveChatBtn")?.addEventListener("click", () => {
             leaveChat();
             window.location.href = "{% url 'landing' %}";
-        };
+        });
 
         const micBtn = document.getElementById("requestMicBtn");
         if (micBtn) {
-            micBtn.onclick = () => {
+            micBtn.addEventListener("click", () => {
                 if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                     chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
                     alert("🎤 Mic request sent to organizer.");
@@ -705,7 +774,7 @@
                     console.error("Chat WebSocket not connected for mic request");
                     alert("Cannot send mic request: WebSocket not connected.");
                 }
-            };
+            });
         }
     </script>
 </body>
