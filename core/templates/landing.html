@@ -32,16 +32,23 @@
             margin-top: 0.5rem;
         }
         .nav-links a, .nav-links button {
-            color: #fff;
+            color: #000;
             text-decoration: none;
             font-weight: 500;
-            background: none;
+            background-color: #fff;
             border: none;
             cursor: pointer;
             font-size: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: background-color 0.3s, transform 0.1s;
         }
         .nav-links a:hover, .nav-links button:hover {
-            text-decoration: underline;
+            background-color: #e0e0e0;
+            transform: scale(1.05);
+        }
+        .nav-links a:active, .nav-links button:active {
+            transform: scale(0.95);
         }
         .nav-links form {
             display: inline;
@@ -54,10 +61,15 @@
         .welcome-section h1 {
             font-size: 2.5rem;
             margin-bottom: 1rem;
+            transition: color 0.3s;
+        }
+        .welcome-section h1:hover {
+            color: limegreen;
         }
         .search-form {
             margin: 1rem 0;
             text-align: center;
+            position: relative;
         }
         .search-input {
             padding: 0.5rem;
@@ -68,6 +80,11 @@
             background-color: white;
             color: #000;
             font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        .search-input:focus {
+            border-color: #00cc00;
+            outline: none;
         }
         .search-button {
             padding: 0.5rem 1rem;
@@ -77,6 +94,31 @@
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        .search-button:hover {
+            background-color: #00cc00;
+            transform: scale(1.05);
+        }
+        .search-button:active {
+            transform: scale(0.95);
+        }
+        .search-loading {
+            display: none;
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border: 3px solid limegreen;
+            border-top: 3px solid #000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
         }
         .tabs-container {
             overflow-x: auto;
@@ -103,6 +145,14 @@
             cursor: pointer;
             flex: 1 1 auto;
             max-width: 200px;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        .tab-btn:hover {
+            background-color: #333;
+            transform: scale(1.05);
+        }
+        .tab-btn:active {
+            transform: scale(0.95);
         }
         .tab-btn.active {
             background-color: #fff;
@@ -119,7 +169,21 @@
         .event-grid {
             display: grid;
             gap: 0.5rem;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+        @media (min-width: 1024px) {
+            .event-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+        @media (max-width: 480px) {
+            .event-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (min-width: 481px) and (max-width: 1023px) {
+            .event-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
         .event-card {
             border: 1px solid #fff;
@@ -127,6 +191,11 @@
             border-radius: 8px;
             background-color: #111;
             font-size: 0.9rem;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .event-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 10px rgba(0, 255, 0, 0.3);
         }
         .event-card h3 {
             margin: 0 0 0.3rem 0;
@@ -136,9 +205,14 @@
             margin: 0.2rem 0;
             font-size: 0.8rem;
         }
-        .join-btn {
-            display: block;
+        .event-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             margin-top: 0.3rem;
+            flex-wrap: wrap;
+        }
+        .join-btn {
             background: limegreen;
             color: #000;
             padding: 0.3rem 0.6rem;
@@ -147,6 +221,19 @@
             font-weight: bold;
             text-decoration: none;
             text-align: center;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        .join-btn:hover {
+            background-color: #00cc00;
+            transform: scale(1.05);
+        }
+        .join-btn:active {
+            transform: scale(0.95);
+        }
+        .event-stats {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.8rem;
         }
         hr.divider {
             border: none;
@@ -170,11 +257,11 @@
             text-decoration: none;
             font-weight: bold;
             font-size: 1rem;
+            transition: color 0.3s;
         }
         .contact-link:hover {
-            text-decoration: underline;
+            color: #00cc00;
         }
-        /* About Popup */
         .about-modal {
             display: none;
             position: fixed;
@@ -221,6 +308,14 @@
             cursor: pointer;
             font-weight: bold;
             margin-top: 1rem;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        .close-btn:hover {
+            background-color: #00cc00;
+            transform: scale(1.05);
+        }
+        .close-btn:active {
+            transform: scale(0.95);
         }
         @keyframes popIn {
             from { transform: scale(0.8); opacity: 0; }
@@ -253,12 +348,8 @@
             .event-card p {
                 font-size: 0.7rem;
             }
-            .join-btn {
+            .join-btn, .event-stats {
                 font-size: 0.7rem;
-                padding: 0.2rem 0.5rem;
-            }
-            .event-grid {
-                grid-template-columns: repeat(2, 1fr);
             }
             .search-input {
                 width: 60%;
@@ -310,6 +401,7 @@
         <div class="search-form">
             <input type="text" id="searchInput" class="search-input" placeholder="Search events or organizers...">
             <button class="search-button" onclick="searchEvents()">Search</button>
+            <div class="search-loading" id="searchLoading"></div>
         </div>
     </header>
     <div class="container">
@@ -328,9 +420,13 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
-                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
-                            <p>❤️ Likes: {{ event.like_count }}</p>
-                            <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                            <div class="event-actions">
+                                <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                                <div class="event-stats">
+                                    <span>👁️ {{ event.viewer_count }}</span>
+                                    <span>❤️ {{ event.like_count }}</span>
+                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -346,9 +442,13 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
-                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
-                            <p>❤️ Likes: {{ event.like_count }}</p>
-                            <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                            <div class="event-actions">
+                                <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                                <div class="event-stats">
+                                    <span>👁️ {{ event.viewer_count }}</span>
+                                    <span>❤️ {{ event.like_count }}</span>
+                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -365,9 +465,12 @@
                             <h3>{{ event.title }}</h3>
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Starts:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
-                            <p>👁️ Viewers: {{ event.viewer_count }}</p>
-                            <p>❤️ Likes: {{ event.like_count }}</p>
-                            <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                            <div class="event-actions">
+                                <div class="event-stats">
+                                    <span>👁️ {{ event.viewer_count }}</span>
+                                    <span>❤️ {{ event.like_count }}</span>
+                                </div>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -402,38 +505,50 @@
         }
 
         function searchEvents() {
-            const query = document.getElementById('searchInput').value.trim().toLowerCase();
-            const grids = [
-                { id: 'livesGrid', noEventsMsg: 'No live events now.' },
-                { id: 'conversationsGrid', noEventsMsg: 'No conversations happening now.' },
-                { id: 'upcomingGrid', noEventsMsg: 'No upcoming events in the next hour.' }
-            ];
-            grids.forEach(grid => {
-                const eventGrid = document.getElementById(grid.id);
-                if (!eventGrid) return;
-                const events = eventGrid.querySelectorAll('.event-card');
-                let visibleCount = 0;
-                events.forEach(event => {
-                    const title = event.getAttribute('data-title');
-                    const organizer = event.getAttribute('data-organizer');
-                    const matches = title.includes(query) || organizer.includes(query);
-                    event.classList.toggle('hidden', !matches);
-                    if (matches) visibleCount++;
+            const searchInput = document.getElementById('searchInput');
+            const searchButton = document.querySelector('.search-button');
+            const searchLoading = document.getElementById('searchLoading');
+            searchButton.disabled = true;
+            searchLoading.style.display = 'block';
+            
+            setTimeout(() => {
+                const query = searchInput.value.trim().toLowerCase();
+                const grids = [
+                    { id: 'livesGrid', noEventsMsg: 'No live events now.' },
+                    { id: 'conversationsGrid', noEventsMsg: 'No conversations happening now.' },
+                    { id: 'upcomingGrid', noEventsMsg: 'No upcoming events in the next hour.' }
+                ];
+
+                grids.forEach(grid => {
+                    const eventGrid = document.getElementById(grid.id);
+                    if (!eventGrid) return;
+                    const events = eventGrid.querySelectorAll('.event-card');
+                    let visibleCount = 0;
+                    events.forEach(event => {
+                        const title = event.getAttribute('data-title');
+                        const organizer = event.getAttribute('data-organizer');
+                        const matches = title.includes(query) || organizer.includes(query);
+                        event.classList.toggle('hidden', !matches);
+                        if (matches) visibleCount++;
+                    });
+                    let noEventsEl = eventGrid.querySelector('.no-events');
+                    if (visibleCount === 0 && !noEventsEl) {
+                        noEventsEl = document.createElement('p');
+                        noEventsEl.className = 'no-events';
+                        noEventsEl.textContent = query ? 'No events found.' : grid.noEventsMsg;
+                        eventGrid.appendChild(noEventsEl);
+                    } else if (visibleCount > 0 && noEventsEl) {
+                        noEventsEl.remove();
+                    } else if (noEventsEl && query) {
+                        noEventsEl.textContent = 'No events found.';
+                    } else if (noEventsEl && !query) {
+                        noEventsEl.textContent = grid.noEventsMsg;
+                    }
                 });
-                let noEventsEl = eventGrid.querySelector('.no-events');
-                if (visibleCount === 0 && !noEventsEl) {
-                    noEventsEl = document.createElement('p');
-                    noEventsEl.className = 'no-events';
-                    noEventsEl.textContent = query ? 'No events found.' : grid.noEventsMsg;
-                    eventGrid.appendChild(noEventsEl);
-                } else if (visibleCount > 0 && noEventsEl) {
-                    noEventsEl.remove();
-                } else if (noEventsEl && query) {
-                    noEventsEl.textContent = 'No events found.';
-                } else if (noEventsEl && !query) {
-                    noEventsEl.textContent = grid.noEventsMsg;
-                }
-            });
+
+                searchButton.disabled = false;
+                searchLoading.style.display = 'none';
+            }, 500); // Simulate async search for better UX
         }
 
         function openAbout() {
@@ -444,12 +559,19 @@
             document.getElementById('aboutModal').style.display = 'none';
         }
 
-        document.getElementById('searchInput').addEventListener('input', searchEvents);
+        document.getElementById('searchInput').addEventListener('input', () => {
+            clearTimeout(window.searchTimeout);
+            window.searchTimeout = setTimeout(searchEvents, 300);
+        });
+
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 searchEvents();
             }
         });
+
+        // Initialize active tab
+        document.querySelector('.tab-btn.active').click();
     </script>
 </body>
 </html>
