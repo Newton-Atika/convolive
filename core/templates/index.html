@@ -443,7 +443,14 @@
             };
             chatSocket.onclose = (event) => {
                 console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(reconnectChatSocket, 3000);
+                if (event.code === 4001) {
+                    alert("Chat unavailable: Payment required for this conversation event.");
+                    window.location.href = "{% url 'pay_event' event.id %}";
+                } else if (event.code === 4000) {
+                    alert("Chat unavailable: Event does not exist.");
+                } else {
+                    setTimeout(reconnectChatSocket, 3000);
+                }
             };
 
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
@@ -671,13 +678,20 @@
                 };
                 chatSocket.onclose = (event) => {
                     console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                    attempts++;
-                    if (attempts < maxAttempts) {
-                        console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
-                        setTimeout(tryConnect, retryInterval);
+                    if (event.code === 4001) {
+                        alert("Chat unavailable: Payment required for this conversation event.");
+                        window.location.href = "{% url 'pay_event' event.id %}";
+                    } else if (event.code === 4000) {
+                        alert("Chat unavailable: Event does not exist.");
                     } else {
-                        console.error("❌ Max retry attempts reached for Chat WebSocket");
-                        alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
+                            setTimeout(tryConnect, retryInterval);
+                        } else {
+                            console.error("❌ Max retry attempts reached for Chat WebSocket");
+                            alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                        }
                     }
                 };
             }
