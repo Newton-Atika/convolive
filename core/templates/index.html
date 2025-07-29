@@ -448,10 +448,11 @@
 
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
             likeSocket.onopen = () => {
-                console.log("✅ Like WebSocket connected");
+                console.log(`✅ Like WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
             };
             likeSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log("📩 Like WebSocket message:", data);
                 if (data.type === "like_update") {
                     document.getElementById("likeCount").innerText = data.total_likes;
                     floatEmoji("❤️", true);
@@ -462,17 +463,19 @@
                     p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
                     p.style.color = "orange";
                     p.className = data.user === user ? "own-message" : "";
-                    document.getElementById("chatArea").appendChild(p);
+                    document.getElementById("chatArea")?.appendChild(p);
                     floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
                 } else if (data.type === "live_started") {
                     document.getElementById("videoPlaceholder")?.remove();
                     initAgora();
                 }
             };
-            likeSocket.onerror = (error) => console.error("❌ Like WebSocket error:", error);
+            likeSocket.onerror = (error) => {
+                console.error("❌ Like WebSocket error:", error);
+            };
             likeSocket.onclose = (event) => {
                 console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(() => initializeWebSockets(), 3000);
+                setTimeout(reconnectLikeSocket, 3000);
             };
         }
 
@@ -681,6 +684,69 @@
             tryConnect();
         }
 
+        function reconnectLikeSocket(callback) {
+            let attempts = 0;
+            const maxAttempts = 3;
+            const retryInterval = 3000;
+
+            function tryConnect() {
+                if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
+                    console.log("✅ Like WebSocket already connected");
+                    if (callback) callback();
+                    return;
+                }
+
+                likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
+                likeSocket.onopen = () => {
+                    console.log(`✅ Like WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
+                    if (callback) callback();
+                };
+                likeSocket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log("📩 Like WebSocket message:", data);
+                    if (data.type === "like_update") {
+                        document.getElementById("likeCount").innerText = data.total_likes;
+                        floatEmoji("❤️", true);
+                    } else if (data.type === "reaction") {
+                        floatEmoji(data.emoji, data.emoji === "❤️");
+                    } else if (data.type === "gift") {
+                        const p = document.createElement("p");
+                        p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
+                        p.style.color = "orange";
+                        p.className = data.user === user ? "own-message" : "";
+                        document.getElementById("chatArea")?.appendChild(p);
+                        floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
+                    } else if (data.type === "live_started") {
+                        document.getElementById("videoPlaceholder")?.remove();
+                        initAgora();
+                    }
+                };
+                likeSocket.onerror = (error) => {
+                    console.error("❌ Like WebSocket error:", error);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        console.log(`🔄 Retrying Like WebSocket connection (${attempts}/${maxAttempts})`);
+                        setTimeout(tryConnect, retryInterval);
+                    } else {
+                        console.error("❌ Max retry attempts reached for Like WebSocket");
+                        alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
+                    }
+                };
+                likeSocket.onclose = (event) => {
+                    console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        console.log(`🔄 Retrying Like WebSocket connection (${attempts}/${maxAttempts})`);
+                        setTimeout(tryConnect, retryInterval);
+                    } else {
+                        console.error("❌ Max retry attempts reached for Like WebSocket");
+                        alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
+                    }
+                };
+            }
+            tryConnect();
+        }
+
         window.onload = () => {
             if (isOrganizer || eventIsLive || hasPaid) {
                 initializeWebSockets();
@@ -726,8 +792,34 @@
                             event_id: eventId
                         }));
                     }
+                    floatEmoji(emoji, isHeart);
+                } else {
+                    console.error("Like WebSocket not connected, attempting to reconnect");
+                    alert("Reactions WebSocket not connected, attempting to reconnect...");
+                    reconnectLikeSocket(() => {
+                        if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
+                            if (isHeart) {
+                                likeSocket.send(JSON.stringify({
+                                    type: "like_update",
+                                    action: liked ? "unlike" : "like",
+                                    event_id: eventId
+                                }));
+                                liked = !liked;
+                                btn.classList.toggle("liked-btn", liked);
+                            } else {
+                                likeSocket.send(JSON.stringify({
+                                    type: "reaction",
+                                    emoji: emoji,
+                                    event_id: eventId
+                                }));
+                            }
+                            floatEmoji(emoji, isHeart);
+                        } else {
+                            console.error("Failed to reconnect Like WebSocket");
+                            alert("Failed to send reaction: Unable to reconnect to reactions.");
+                        }
+                    });
                 }
-                floatEmoji(emoji, isHeart);
             });
         });
 
@@ -740,7 +832,7 @@
                     console.log(`📤 Sent message: ${msg}`);
                 } else {
                     console.error("Chat WebSocket not connected, attempting to reconnect");
-                    alert("WebSocket not connected, attempting to reconnect...");
+                    alert("Chat WebSocket not connected, attempting to reconnect...");
                     reconnectChatSocket(() => {
                         if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
                             chatSocket.send(JSON.stringify({ type: "message", message: msg }));
