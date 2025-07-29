@@ -436,10 +436,13 @@
                     video.srcObject = null;
                     video.style.display = "none";
                     alert("🔇 Your mic/video access was revoked.");
+                } else if (data.type === "mute_user" && data.username === user) {
+                    alert("🔇 You have been muted by the organizer.");
                 }
             };
             chatSocket.onerror = (error) => {
                 console.error("❌ Chat WebSocket error:", error);
+                alert("Chat connection failed. Trying to reconnect...");
             };
             chatSocket.onclose = (event) => {
                 console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
@@ -449,7 +452,7 @@
                 } else if (event.code === 4000) {
                     alert("Chat unavailable: Event does not exist.");
                 } else {
-                    setTimeout(reconnectChatSocket, 3000);
+                    setTimeout(reconnectChatSocket, 2000);
                 }
             };
 
@@ -482,7 +485,7 @@
             };
             likeSocket.onclose = (event) => {
                 console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(reconnectLikeSocket, 3000);
+                setTimeout(reconnectLikeSocket, 2000);
             };
         }
 
@@ -604,8 +607,8 @@
 
         function reconnectChatSocket(callback) {
             let attempts = 0;
-            const maxAttempts = 3;
-            const retryInterval = 3000;
+            const maxAttempts = 5;
+            const retryInterval = 2000;
 
             function tryConnect() {
                 if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
@@ -663,6 +666,8 @@
                         video.srcObject = null;
                         video.style.display = "none";
                         alert("🔇 Your mic/video access was revoked.");
+                    } else if (data.type === "mute_user" && data.username === user) {
+                        alert("🔇 You have been muted by the organizer.");
                     }
                 };
                 chatSocket.onerror = (error) => {
@@ -673,7 +678,7 @@
                         setTimeout(tryConnect, retryInterval);
                     } else {
                         console.error("❌ Max retry attempts reached for Chat WebSocket");
-                        alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                        alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
                     }
                 };
                 chatSocket.onclose = (event) => {
@@ -690,7 +695,7 @@
                             setTimeout(tryConnect, retryInterval);
                         } else {
                             console.error("❌ Max retry attempts reached for Chat WebSocket");
-                            alert("Failed to connect to chat after multiple attempts. Please refresh the page.");
+                            alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
                         }
                     }
                 };
@@ -700,8 +705,8 @@
 
         function reconnectLikeSocket(callback) {
             let attempts = 0;
-            const maxAttempts = 3;
-            const retryInterval = 3000;
+            const maxAttempts = 5;
+            const retryInterval = 2000;
 
             function tryConnect() {
                 if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
@@ -854,7 +859,7 @@
                             console.log(`📤 Sent message after reconnect: ${msg}`);
                         } else {
                             console.error("Failed to reconnect Chat WebSocket");
-                            alert("Failed to send message: Unable to reconnect to chat.");
+                            alert("Failed to send message: Unable to reconnect to chat. Please refresh the page or verify payment.");
                         }
                     });
                 }
