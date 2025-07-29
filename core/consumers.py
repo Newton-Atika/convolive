@@ -89,16 +89,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.event_id = self.scope['url_route']['kwargs']['event_id']
         self.room_group_name = f'chat_{self.event_id}'
+        user = self.scope['user']
 
         try:
             Event = apps.get_model('core', 'Event')
-            await sync_to_async(Event.objects.get)(id=self.event_id, is_live=True)
+            event = await sync_to_async(Event.objects.get)(id=self.event_id)
+            # Allow connection for live events or paid conversation events
+            if event.is_live or (user.is_authenticated and await self.has_paid(event, user)):
+                await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+                await self.accept()
+            else:
+                await self.close(code=4001, reason="Payment required for conversation event")
+                return
         except Event.DoesNotExist:
-            await self.close()
+            await self.close(code=4000, reason="Event does not exist")
             return
 
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        await self.accept()
+    @sync_to_async
+    def has_paid(self, event, user):
+        Payment = apps.get_model('core', 'Payment')
+        return Payment.objects.filter(event=event, user=user, verified=True).exists()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
@@ -108,7 +118,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             data = json.loads(text_data)
             user = self.scope['user']
             username = user.username if user.is_authenticated else 'Anonymous'
-
             if data.get("type") == "message":
                 await self.save_message(username, data["message"])
                 await self.channel_layer.group_send(
@@ -184,7 +193,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class StreamConsumer(AsyncWebsocketConsumer):
     organizers = {}  # event_id => channel_name
-    viewers = {}     # event_id => { username: channel_name }
+    viewers = {}  # event_id => { username: channel_name }
 
     async def connect(self):
         self.event_id = self.scope['url_route']['kwargs']['event_id']
@@ -192,22 +201,15 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         self.username = str(self.user.username) if self.user.is_authenticated else "anonymous"
         self.user_id = str(self.user.pk) if self.user.is_authenticated else "0"
-
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-
-        # Organizer detection
         self.is_organizer = self.user.is_authenticated and self.scope["session"].get("organizer_pk") == str(self.user.pk)
-
         if self.is_organizer:
             StreamConsumer.organizers[self.event_id] = self.channel_name
             print(f"[ORGANIZER CONNECTED] {self.username} -> {self.channel_name} for event {self.event_id}")
         else:
             StreamConsumer.viewers.setdefault(self.event_id, {})[self.username] = self.channel_name
             print(f"[VIEWER CONNECTED] {self.username} -> {self.channel_name} for event {self.event_id}")
-
         await self.accept()
-
-        # Notify clients of stream status
         if self.event_id in StreamConsumer.organizers and not self.is_organizer:
             await self.send(json.dumps({"type": "live_started"}))
             print(f"[LIVE_STARTED] Notified {self.username} for event {self.event_id}")
@@ -226,7 +228,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         msg_type = data.get("type")
         print(f"[RECEIVED] {self.username} sent {msg_type} for event {self.event_id}")
-
         if msg_type == "live_started" and self.is_organizer:
             print(f"[LIVE_STARTED] Broadcasting for event {self.event_id}")
             await self.channel_layer.group_send(
