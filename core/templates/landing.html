@@ -396,8 +396,8 @@
         </div>
     </nav>
     <header class="welcome-section">
-        <h1>Welcome to the Future of Live Engagement</h1>
-        <p>Join live sessions, engaging conversations, or catch up on upcoming events!</p>
+        <h1>Welcome to Live Engagement</h1>
+        <p>Join live sessions, engaging live shows, or catch up on upcoming events!</p>
         <div class="search-form">
             <input type="text" id="searchInput" class="search-input" placeholder="Search events or organizers...">
             <button class="search-button" onclick="searchEvents()">Search</button>
@@ -407,8 +407,8 @@
     <div class="container">
         <div class="tabs-container">
             <div class="tabs">
-                <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives Now</button>
-                <button class="tab-btn" onclick="openTab(event, 'conversations')">💬 Conversations</button>
+                <button class="tab-btn active" onclick="openTab(event, 'lives')">🎥 Lives </button>
+                <button class="tab-btn" onclick="openTab(event, 'conversations')">💬 Live Shows</button>
                 <button class="tab-btn" onclick="openTab(event, 'upcoming')">⏰ Upcoming</button>
             </div>
         </div>
@@ -424,7 +424,6 @@
                                 <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                                 <div class="event-stats">
                                     <span>👁️ {{ event.viewer_count }}</span>
-                                    <span>❤️ {{ event.like_count }}</span>
                                 </div>
                             </div>
                         </div>
@@ -446,7 +445,6 @@
                                 <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
                                 <div class="event-stats">
                                     <span>👁️ {{ event.viewer_count }}</span>
-                                    <span>❤️ {{ event.like_count }}</span>
                                 </div>
                             </div>
                         </div>
@@ -468,7 +466,7 @@
                             <div class="event-actions">
                                 <div class="event-stats">
                                     <span>👁️ {{ event.viewer_count }}</span>
-                                    <span>❤️ {{ event.like_count }}</span>
+                                    
                                 </div>
                             </div>
                         </div>
@@ -575,3 +573,4 @@
     </script>
 </body>
 </html>
+
