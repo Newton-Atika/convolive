@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-g=f3-is1f0vna5%1a3)is1b(w4h7ioxkek4-#c0=onblky+t@n
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["web-production-816d1.up.railway.app"]
+ALLOWED_HOSTS = ["web-production-816d1.up.railway.app",'liveconversation.site',"www.liveconversation.site"]
 
 ASGI_APPLICATION = "convolive.asgi.application"
 
@@ -84,6 +84,7 @@ WSGI_APPLICATION = 'convolive.wsgi.application'
 
 CSRF_TRUSTED_ORIGINS = [
     'https://web-production-816d1.up.railway.app',
+    'https://www.liveconversation.site',
 ]
 # settings.py
 LOGGING = {
@@ -171,3 +172,4 @@ LIVEKIT_URL = 'wss://convolive-1v7m4e6q.livekit.cloud'
 LIVEKIT_API_KEY = "API3mLfygt68Dxs"
 LIVEKIT_API_SECRET = "nyDCJgfJ2OF8daESzSje8rrVJnZBWFzv5vXKZNeqF1oA"
 WEB_SOCKET_URL = "wss://convolive-1v7m4e6q.livekit.cloud"
+
