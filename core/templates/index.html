@@ -214,6 +214,7 @@
     </style>
 </head>
 <body>
+{% if user.is_authenticated %}
     {% if not event.is_live %}
         {% if has_paid %}
             <!-- Conversation Event: User has paid -->
@@ -347,6 +348,12 @@
             </div>
         </div>
     {% endif %}
+{% else %}
+    <div class="login-warning">
+        ⚠️ You need to <a href="{% url 'login' %}?next={{ request.path }}">sign in</a> to view this page.
+    </div>
+{% endif %}
+
     <script>
         const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
         const CHANNEL = '{{ event.id|escapejs }}';
