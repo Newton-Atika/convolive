@@ -534,10 +534,6 @@ def verify_payment(request):
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
-
-@login_required
-@csrf_exempt
-import uuid
 import logging
 import requests
 from django.conf import settings
@@ -768,6 +764,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
