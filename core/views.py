@@ -537,13 +537,34 @@ import uuid
 
 @login_required
 @csrf_exempt
+import uuid
+import logging
+import requests
+from django.conf import settings
+from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+
+from .models import Event, Gift  # adjust imports if needed
+
+logger = logging.getLogger(__name__)
+
+@login_required
 def initiate_gift_payment(request, event_id):
     if request.method == 'POST':
         amount = request.POST.get('amount')
+        if not amount or not amount.isdigit():
+            messages.error(request, "Invalid gift amount.")
+            return redirect('join_event', event_id=event_id)
+
         event = get_object_or_404(Event, id=event_id)
         user = request.user
         reference = str(uuid.uuid4())
-        callback_url = request.build_absolute_uri('/verify-gift-payment/')
+
+        # Use named URL for callback instead of hardcoding
+        callback_url = request.build_absolute_uri(
+            reverse('verify_gift_payment')
+        ) + f"?ref={reference}"
 
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
@@ -552,36 +573,52 @@ def initiate_gift_payment(request, event_id):
 
         data = {
             "email": user.email,
-            "amount": int(amount) * 100,  # convert to kobo
+            "amount": int(amount) * 100,  # Paystack expects subunits
             "reference": reference,
+            "currency": "KES",  # ✅ Important for Kenya
             "callback_url": callback_url,
         }
 
-        # store reference temporarily in session
+        # Store reference temporarily in session
         request.session['gift_reference'] = reference
         request.session['gift_amount'] = amount
         request.session['gift_event_id'] = event_id
 
         try:
-            response = requests.post("https://api.paystack.co/transaction/initialize", headers=headers, json=data)
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                headers=headers,
+                json=data
+            )
             response.raise_for_status()
             res_data = response.json()
-            return redirect(res_data['data']['authorization_url'])
+
+            logger.info(f"Gift init response: {res_data}")
+
+            if res_data.get("status") and "authorization_url" in res_data["data"]:
+                return redirect(res_data["data"]["authorization_url"])
+            else:
+                messages.error(request, f"Gift payment init failed: {res_data.get('message')}")
+                return redirect('join_event', event_id=event_id)
+
         except Exception as e:
+            logger.error(f"Gift payment init error: {str(e)}")
             return render(request, "payment_error.html", {"error": str(e)})
+
     return redirect('join_event', event_id=event_id)
+
 @login_required
 def verify_gift_payment(request):
-    reference = request.GET.get('reference')
+    reference = request.GET.get('reference') or request.GET.get('ref')
     expected_ref = request.session.get('gift_reference')
-
-    event = None  # Initialize event
+    event_id = request.session.get('gift_event_id')
+    event = Event.objects.filter(id=event_id).first() if event_id else None
 
     if not reference or reference != expected_ref:
-        event_id = request.session.get('gift_event_id')
-        if event_id:
-            event = Event.objects.filter(id=event_id).first()
-        return render(request, "payment_error.html", {"error": "Invalid reference.", "event": event})
+        return render(request, "payment_error.html", {
+            "error": "Invalid payment reference.",
+            "event": event
+        })
 
     headers = {
         "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
@@ -589,36 +626,44 @@ def verify_gift_payment(request):
     }
 
     try:
-        res = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
+        res = requests.get(
+            f"https://api.paystack.co/transaction/verify/{reference}",
+            headers=headers
+        )
+        res.raise_for_status()
         res_data = res.json()
 
-        if res_data['data']['status'] == 'success':
-            # Save gift
-            event_id = request.session.get('gift_event_id')
-            event = get_object_or_404(Event, id=event_id)
+        logger.info(f"Gift verify response for {reference}: {res_data}")
+
+        if res_data.get("status") and res_data["data"]["status"] == "success":
             amount = request.session.get('gift_amount')
+            if not event:
+                return render(request, "payment_error.html", {"error": "Event not found."})
 
-            Gift.objects.create(user=request.user, event=event, amount=amount)
+            # Save gift
+            Gift.objects.create(
+                user=request.user,
+                event=event,
+                amount=amount,
+                reference=reference  # ✅ useful for records
+            )
 
-            # Optionally clear session
+            # Clear session
             for key in ['gift_reference', 'gift_event_id', 'gift_amount']:
                 request.session.pop(key, None)
 
+            messages.success(request, "Gift sent successfully! 🎁")
             return redirect('join_event', event_id=event.id)
 
-        event_id = request.session.get('gift_event_id')
-        if event_id:
-            event = Event.objects.filter(id=event_id).first()
         return render(request, "payment_error.html", {
-            "error": "Gift payment not successful.",
+            "error": "Gift payment was not successful.",
             "event": event
         })
 
     except Exception as e:
-        event_id = request.session.get('gift_event_id')
-        if event_id:
-            event = Event.objects.filter(id=event_id).first()
+        logger.error(f"Gift payment verify error for {reference}: {str(e)}")
         return render(request, "payment_error.html", {"error": str(e), "event": event})
+
 # views.py
 from django.db.models.functions import Cast
 from django.db.models import Sum, IntegerField
@@ -723,5 +768,6 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
