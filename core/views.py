@@ -399,23 +399,34 @@ def join_event(request, event_id):
         'organizer_id': event.organizer.pk,
         'mux_playback_id': event.mux_playback_id,
     })
-@login_required
+import uuid
+import logging
+import requests
+from django.conf import settings
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
+from django.contrib import messages
+
+from .models import Event, Payment  # adjust path if different
+
+logger = logging.getLogger(__name__)
+
 def initiate_paystack_payment(request, event_id):
     event = get_object_or_404(Event, id=event_id)
-    
+
     # Live events don't require payment
     if event.is_live:
         logger.info(f"User {request.user.id} joining live event {event.id} without payment")
         return redirect('join_event', event_id=event.id)
-    
+
     # Check if already paid
     if Payment.objects.filter(user=request.user, event=event, verified=True).exists():
         logger.info(f"User {request.user.id} already paid for conversation {event.id}")
         return redirect('join_event', event_id=event.id)
-    
+
     # Create unique reference
     reference = str(uuid.uuid4())
-    
+
     # Create Payment record with verified=False
     payment = Payment.objects.create(
         user=request.user,
@@ -423,39 +434,56 @@ def initiate_paystack_payment(request, event_id):
         reference=reference,
         amount=60  # Fixed price in KES
     )
-    
-    callback_url = request.build_absolute_uri(reverse('verify_payment')) + f"?ref={reference}"
-    
+
+    callback_url = request.build_absolute_uri(
+        reverse('verify_payment')
+    ) + f"?ref={reference}"
+
     headers = {
         "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
         "Content-Type": "application/json",
     }
-    
+
     data = {
         "email": request.user.email,
-        "amount": int(payment.amount * 100),  # Convert to kobo
+        "amount": int(payment.amount * 100),  # Paystack expects amount in subunits
         "reference": reference,
+        "currency": "KES",  # ✅ Important for Kenya
         "callback_url": callback_url,
     }
-    
+
     try:
-        response = requests.post('https://api.paystack.co/transaction/initialize', json=data, headers=headers)
-        response.raise_for_status()  # Raise exception for bad status codes
+        response = requests.post(
+            'https://api.paystack.co/transaction/initialize',
+            json=data,
+            headers=headers
+        )
+        response.raise_for_status()
         response_data = response.json()
-        
-        if response_data.get('status') and 'data' in response_data and 'authorization_url' in response_data['data']:
-            logger.info(f"Payment initiated for user {request.user.id}, conversation {event.id}, reference {reference}")
+
+        logger.info(f"Paystack init response: {response_data}")  # ✅ Log everything
+
+        if (
+            response_data.get('status')
+            and 'data' in response_data
+            and 'authorization_url' in response_data['data']
+        ):
+            logger.info(
+                f"Payment initiated for user {request.user.id}, conversation {event.id}, reference {reference}"
+            )
             return redirect(response_data['data']['authorization_url'])
         else:
             logger.error(f"Paystack initialization failed for reference {reference}: {response_data}")
-            payment.delete()  # Clean up failed payment record
+            payment.delete()
             messages.error(request, "Failed to initiate payment. Please try again.")
             return redirect('join_event', event_id=event.id)
+
     except requests.RequestException as e:
         logger.error(f"Paystack API error for reference {reference}: {str(e)}")
-        payment.delete()  # Clean up failed payment record
+        payment.delete()
         messages.error(request, "Payment service unavailable. Please try again later.")
         return redirect('join_event', event_id=event.id)
+
 
 from django.shortcuts import redirect, get_object_or_404
 from django.contrib import messages
@@ -467,33 +495,42 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 def verify_payment(request):
-    reference = request.GET.get('ref')
+    reference = request.GET.get("reference") or request.GET.get("ref")
     if not reference:
-        logger.error("No reference provided in verify_payment")
-        return HttpResponse("Invalid payment reference", status=400)
+        messages.error(request, "Invalid payment reference")
+        return redirect("home")  # fallback
 
-    payment = get_object_or_404(Payment, reference=reference)
-    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+    headers = {
+        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+    }
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+
     try:
-        url = f"https://api.paystack.co/transaction/verify/{reference}"
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        res_data = response.json()
-        if res_data.get('status') and res_data.get('data', {}).get('status') == 'success':
-            with transaction.atomic():
+        data = response.json()
+
+        logger.info(f"Paystack verify response for {reference}: {data}")
+
+        if data.get("status") and data["data"]["status"] == "success":
+            payment = Payment.objects.filter(reference=reference).first()
+            if payment:
                 payment.verified = True
                 payment.save()
-            logger.info(f"Payment verified for user {payment.user.id}, conversation {payment.event.id}, reference {reference}")
-            messages.success(request, "Payment verified successfully. You can now join the conversation.")
-            return redirect('join_event', event_id=payment.event.id)
+                messages.success(request, "Payment successful! 🎉")
+                return redirect("join_event", event_id=payment.event.id)
+            else:
+                messages.error(request, "Payment record not found")
+                return redirect("home")
         else:
-            logger.error(f"Payment verification failed for reference {reference}: {res_data}")
-            messages.error(request, "Payment verification failed. Please contact support.")
-            return redirect('event_detail', event_id=payment.event.id)
+            messages.error(request, "Payment verification failed")
+            return redirect("home")
+
     except requests.RequestException as e:
-        logger.error(f"Paystack verification error for reference {reference}: {str(e)}")
-        messages.error(request, "Error verifying payment. Please try again or contact support.")
-        return redirect('event_detail', event_id=payment.event.id)
+        logger.error(f"Paystack verify API error for reference {reference}: {str(e)}")
+        messages.error(request, "Error verifying payment. Try again.")
+        return redirect("home")
+
 # views.py
 from django.views.decorators.csrf import csrf_exempt
 import uuid
@@ -686,4 +723,5 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
