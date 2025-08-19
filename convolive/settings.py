@@ -166,10 +166,11 @@ AGORA_APP_CERTIFICATE = "14dbee5468bd45708a100d49532a6815"
 
 STATIC_URL = '/static/'
 #STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-PAYSTACK_SECRET_KEY = "sk_test_d50b2d43213a91922470eee1eea7fee305c3beff"
-PAYSTACK_PUBLIC_KEY = "pk_test_1add01d278e4485c17af0931cb678675e56eed61"
+PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
+PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
 LIVEKIT_URL = 'wss://convolive-1v7m4e6q.livekit.cloud'
 LIVEKIT_API_KEY = "API3mLfygt68Dxs"
 LIVEKIT_API_SECRET = "nyDCJgfJ2OF8daESzSje8rrVJnZBWFzv5vXKZNeqF1oA"
 WEB_SOCKET_URL = "wss://convolive-1v7m4e6q.livekit.cloud"
+
 
