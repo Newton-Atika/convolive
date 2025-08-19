@@ -311,7 +311,7 @@ def create_event(request):
                     messages.error(request, "Failed to create live stream. Event created without streaming.")
             
             messages.success(request, f"{'Live event' if event.is_live else 'Conversation'} '{event.title}' created successfully.")
-            return redirect('event_detail', event_id=event.id)
+            return redirect('join_event', event_id=event.id)
     else:
         form = EventForm()
     
@@ -341,7 +341,7 @@ def create_conversation(request):
             LiveStatus.objects.create(event=event, is_active=True)
             
             messages.success(request, f"Conversation '{event.title}' created successfully.")
-            return redirect('event_detail', event_id=event.id)
+            return redirect('join_event', event_id=event.id)
     else:
         form = EventForm(initial={'is_live': False})
     
@@ -421,7 +421,7 @@ def initiate_paystack_payment(request, event_id):
         user=request.user,
         event=event,
         reference=reference,
-        amount=50  # Fixed price in KES
+        amount=60  # Fixed price in KES
     )
     
     callback_url = request.build_absolute_uri(reverse('verify_payment')) + f"?ref={reference}"
@@ -450,12 +450,12 @@ def initiate_paystack_payment(request, event_id):
             logger.error(f"Paystack initialization failed for reference {reference}: {response_data}")
             payment.delete()  # Clean up failed payment record
             messages.error(request, "Failed to initiate payment. Please try again.")
-            return redirect('event_detail', event_id=event.id)
+            return redirect('join_event', event_id=event.id)
     except requests.RequestException as e:
         logger.error(f"Paystack API error for reference {reference}: {str(e)}")
         payment.delete()  # Clean up failed payment record
         messages.error(request, "Payment service unavailable. Please try again later.")
-        return redirect('event_detail', event_id=event.id)
+        return redirect('join_event', event_id=event.id)
 
 from django.shortcuts import redirect, get_object_or_404
 from django.contrib import messages
@@ -686,3 +686,4 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
