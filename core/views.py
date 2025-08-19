@@ -613,6 +613,9 @@ def verify_gift_payment(request):
     event = Event.objects.filter(id=event_id).first() if event_id else None
 
     if not reference or reference != expected_ref:
+        messages.error(request, "Invalid gift payment reference.")
+        if event:
+            return redirect("join_event", event_id=event.id)
         return redirect("landing")
 
     headers = {
@@ -631,6 +634,7 @@ def verify_gift_payment(request):
             if not event:
                 return redirect("landing")
 
+            # Save gift
             Gift.objects.create(
                 user=request.user,
                 event=event,
@@ -638,21 +642,26 @@ def verify_gift_payment(request):
                 reference=reference
             )
 
-            # clear session
+            # Clear session
             for key in ['gift_reference', 'gift_event_id', 'gift_amount']:
                 request.session.pop(key, None)
 
             messages.success(request, "Gift sent successfully! 🎁")
             return redirect("join_event", event_id=event.id)
 
-        # failed gift payment → go to landing
-        messages.error(request, "Gift payment not successful.")
+        # ❌ Payment failed → stay in event page
+        messages.error(request, "Gift payment was not successful.")
+        if event:
+            return redirect("join_event", event_id=event.id)
         return redirect("landing")
 
     except Exception as e:
         logger.error(f"Gift payment verify error for {reference}: {str(e)}")
         messages.error(request, "Error verifying gift payment.")
+        if event:
+            return redirect("join_event", event_id=event.id)
         return redirect("landing")
+
 
 # views.py
 from django.db.models.functions import Cast
@@ -758,6 +767,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
