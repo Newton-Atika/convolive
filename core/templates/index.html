@@ -211,6 +211,21 @@
                 font-size: 0.8rem;
             }
         }
+
+        /* 🔵 Added: Switch Camera button style (organizer only) */
+        #switchCameraBtn {
+            background-color: dodgerblue;
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #switchCameraBtn[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -231,6 +246,8 @@
                     <div class="tab" data-target="gifts">🎁 <span>Gifts</span></div>
                     <div class="tab" data-target="chat">💬 <span>Messages</span></div>
                     {% if user.pk == event.organizer.pk %}
+                        <!-- 🔵 Added: Switch Camera button for organizer -->
+                        <button id="switchCameraBtn" class="tab" title="Switch between front/back cameras">🔄 Switch Camera</button>
                         <form method="post" action="{% url 'end_event' event.id %}">
                             {% csrf_token %}
                             <button type="submit" id="endLiveBtn" class="tab">🔴 End Live</button>
@@ -300,6 +317,8 @@
                 <div class="tab" data-target="gifts">🎁 <span>Gifts</span></div>
                 <div class="tab" data-target="chat">💬 <span>Messages</span></div>
                 {% if user.pk == event.organizer.pk %}
+                    <!-- 🔵 Added: Switch Camera button for organizer (live branch) -->
+                    <button id="switchCameraBtn" class="tab" title="Switch between front/back cameras">🔄 Switch Camera</button>
                     <form method="post" action="{% url 'end_event' event.id %}">
                         {% csrf_token %}
                         <button type="submit" id="endLiveBtn" class="tab">🔴 End Live</button>
@@ -366,7 +385,11 @@
         const rtc = {
             client: null,
             localAudioTrack: null,
-            localVideoTrack: null
+            localVideoTrack: null,
+
+            /* 🔵 Added: camera management state */
+            cameras: [],
+            currentCameraIndex: 0
         };
         let socket;
         let chatSocket;
@@ -496,6 +519,29 @@
             };
         }
 
+        /* 🔵 Added: Switch camera function for organizer */
+        async function switchCamera() {
+            try {
+                if (!rtc.localVideoTrack) {
+                    alert("Camera not ready yet.");
+                    return;
+                }
+                if (!rtc.cameras || rtc.cameras.length < 2) {
+                    alert("Only one camera detected.");
+                    return;
+                }
+                // Round-robin through available cameras
+                rtc.currentCameraIndex = (rtc.currentCameraIndex + 1) % rtc.cameras.length;
+                const nextDeviceId = rtc.cameras[rtc.currentCameraIndex].deviceId;
+
+                await rtc.localVideoTrack.setDevice(nextDeviceId);
+                console.log("🔄 Switched to:", rtc.cameras[rtc.currentCameraIndex].label || nextDeviceId);
+            } catch (err) {
+                console.error("Switch camera error:", err);
+                alert("Could not switch camera.");
+            }
+        }
+
         async function initAgora() {
             if (rtc.client) return;
             try {
@@ -508,6 +554,7 @@
                 console.log(`Agora Token: ${token}, UID: ${uid}, Role: ${role}`);
                 rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
                 await rtc.client.join(APP_ID, CHANNEL, token, uid);
+
                 rtc.client.on("user-published", async (user, mediaType) => {
                     try {
                         await rtc.client.subscribe(user, mediaType);
@@ -533,19 +580,51 @@
                         console.log("Remote video unpublished");
                     }
                 });
+
                 if (isOrganizer) {
                     await rtc.client.setClientRole("host");
                     try {
                         rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+
+                        /* 🔵 Added: enumerate cameras first */
+                        rtc.cameras = await AgoraRTC.getCameras();
+                        // Prefer front camera if labels exist; otherwise index 0
+                        let initialIndex = 0;
+                        const frontIdx = rtc.cameras.findIndex(c =>
+                            (c.label || "").toLowerCase().includes("front") ||
+                            (c.label || "").toLowerCase().includes("user")
+                        );
+                        if (frontIdx >= 0) initialIndex = frontIdx;
+                        rtc.currentCameraIndex = Math.max(0, initialIndex);
+
+                        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                            cameraId: rtc.cameras[rtc.currentCameraIndex]?.deviceId,
+                            encoderConfig: "720p_3" // keep your defaults; not changing behavior
+                        });
+
                         const localVideo = document.getElementById("localVideo");
                         rtc.localVideoTrack.play(localVideo);
                         localVideo.style.display = "block";
                         await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
                         console.log("Organizer published audio/video tracks");
+
+                        // 🔵 Added: attach the switch button if present and enable only if >1 camera
+                        const switchBtn = document.getElementById("switchCameraBtn");
+                        if (switchBtn) {
+                            if (rtc.cameras.length > 1) {
+                                switchBtn.disabled = false;
+                                switchBtn.addEventListener("click", switchCamera);
+                            } else {
+                                switchBtn.disabled = true;
+                                switchBtn.title = "Only one camera detected";
+                            }
+                        }
                     } catch (err) {
                         console.error("Organizer media error:", err);
                         alert("Failed to access camera/microphone for organizer.");
+                        // If we failed to create video track, disable switch button to avoid confusion
+                        const switchBtn = document.getElementById("switchCameraBtn");
+                        if (switchBtn) switchBtn.disabled = true;
                     }
                 } else {
                     await rtc.client.setClientRole("audience");
@@ -795,6 +874,14 @@
             if (reactionsTab) {
                 document.getElementById("reactions").classList.add("active");
                 reactionsTab.classList.add("active");
+            }
+
+            /* 🔵 Added: If the button exists at load but Agora hasn't initialized yet, keep it disabled.
+               It will be enabled inside initAgora when cameras are enumerated. */
+            const switchBtn = document.getElementById("switchCameraBtn");
+            if (switchBtn) {
+                switchBtn.disabled = true;
+                switchBtn.title = "Initializing camera…";
             }
         };
 
