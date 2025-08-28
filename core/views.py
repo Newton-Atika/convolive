@@ -548,6 +548,68 @@ from .models import Event, Gift  # adjust imports if needed
 logger = logging.getLogger(__name__)
 
 @login_required
+def initiate_gift_payment(request, event_id):
+    if request.method == 'POST':
+        amount = request.POST.get('amount')
+        if not amount or not amount.isdigit():
+            messages.error(request, "Invalid gift amount.")
+            return redirect('join_event', event_id=event_id)
+
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+        reference = str(uuid.uuid4())
+
+        # Use named URL for callback instead of hardcoding
+        callback_url = request.build_absolute_uri(
+            reverse('verify_gift_payment')
+        ) + f"?ref={reference}"
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "email": user.email,
+            "amount": int(amount) * 100,  # Paystack expects subunits
+            "reference": reference,
+            "currency": "KES",  # ✅ Important for Kenya
+            "callback_url": callback_url,
+        }
+
+        # Store reference temporarily in session
+        request.session['gift_reference'] = reference
+        request.session['gift_amount'] = amount
+        request.session['gift_event_id'] = event_id
+
+        try:
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                headers=headers,
+                json=data
+            )
+            response.raise_for_status()
+            res_data = response.json()
+
+            logger.info(f"Gift init response: {res_data}")
+
+            if res_data.get("status") and "authorization_url" in res_data["data"]:
+                return redirect(res_data["data"]["authorization_url"])
+            else:
+                messages.error(
+                    request,
+                    f"Gift payment init failed: {res_data.get('message')}"
+                )
+                return redirect('join_event', event_id=event_id)
+
+        except Exception as e:
+            logger.error(f"Gift payment init error: {str(e)}")
+            return render(request, "payment_error.html", {"error": str(e)})
+
+    return redirect('join_event', event_id=event_id)
+
+
+@login_required
 def verify_gift_payment(request):
     reference = request.GET.get('reference') or request.GET.get('ref')
     expected_ref = request.session.get('gift_reference')
@@ -569,69 +631,6 @@ def verify_gift_payment(request):
             f"https://api.paystack.co/transaction/verify/{reference}",
             headers=headers
         )
-        res.raise_for_status()
-        res_data = res.json()
-
-        logger.info(f"Gift verify response for {reference}: {res_data}")
-
-        if res_data.get("status") and res_data["data"]["status"] == "success":
-            gift_amount = request.session.get('gift_amount')
-            if not event:
-                return redirect("landing")
-
-            # ✅ Ensure saved amount matches valid choices
-            valid_choices = dict(Gift.GIFT_CHOICES).keys()
-            if gift_amount not in valid_choices:
-                logger.warning(f"Invalid gift choice attempted: {gift_amount}")
-                messages.error(request, "Invalid gift option selected.")
-                return redirect("join_event", event_id=event.id)
-
-            # Save only successful payments with valid gift choice
-            Gift.objects.create(
-                user=request.user,
-                event=event,
-                amount=gift_amount,
-            )
-
-            # Clear session
-            for key in ['gift_reference', 'gift_event_id', 'gift_amount']:
-                request.session.pop(key, None)
-
-            messages.success(request, "Gift sent successfully! 🎁")
-            return redirect("join_event", event_id=event.id)
-
-        # ❌ Payment failed → stay in event page
-        messages.error(request, "Gift payment was not successful.")
-        if event:
-            return redirect("join_event", event_id=event.id)
-        return redirect("landing")
-
-    except Exception as e:
-        logger.error(f"Gift payment verify error for {reference}: {str(e)}")
-        messages.error(request, "Error verifying gift payment.")
-        if event:
-            return redirect("join_event", event_id=event.id)
-        return redirect("landing")
-
-@login_required
-def verify_gift_payment(request):
-    reference = request.GET.get('reference') or request.GET.get('ref')
-    expected_ref = request.session.get('gift_reference')
-    event_id = request.session.get('gift_event_id')
-    event = Event.objects.filter(id=event_id).first() if event_id else None
-
-    if not reference or reference != expected_ref:
-        messages.error(request, "Invalid gift payment reference.")
-        if event:
-            return redirect("join_event", event_id=event.id)
-        return redirect("landing")
-
-    headers = {
-        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-    }
-
-    try:
-        res = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
         res.raise_for_status()
         res_data = res.json()
 
@@ -669,7 +668,6 @@ def verify_gift_payment(request):
         if event:
             return redirect("join_event", event_id=event.id)
         return redirect("landing")
-
 
 # views.py
 from django.db.models.functions import Cast
@@ -775,6 +773,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
