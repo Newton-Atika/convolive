@@ -311,7 +311,7 @@ def create_event(request):
                     messages.error(request, "Failed to create live stream. Event created without streaming.")
             
             messages.success(request, f"{'Live event' if event.is_live else 'Conversation'} '{event.title}' created successfully.")
-            return redirect('join_event', event_id=event.id)
+            return redirect('landing', event_id=event.id)
     else:
         form = EventForm()
     
@@ -341,7 +341,7 @@ def create_conversation(request):
             LiveStatus.objects.create(event=event, is_active=True)
             
             messages.success(request, f"Conversation '{event.title}' created successfully.")
-            return redirect('join_event', event_id=event.id)
+            return redirect('landing', event_id=event.id)
     else:
         form = EventForm(initial={'is_live': False})
     
@@ -767,6 +767,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
