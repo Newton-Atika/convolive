@@ -550,16 +550,17 @@ logger = logging.getLogger(__name__)
 @login_required
 def initiate_gift_payment(request, event_id):
     if request.method == 'POST':
-        amount = request.POST.get('amount')
-        if not amount or not amount.isdigit():
-            messages.error(request, "Invalid gift amount.")
+        gift_amount = request.POST.get('amount')
+
+        # ✅ Ensure the amount is one of the allowed choices
+        if gift_amount not in dict(Gift.GIFT_CHOICES):
+            messages.error(request, "Invalid gift amount choice.")
             return redirect('join_event', event_id=event_id)
 
         event = get_object_or_404(Event, id=event_id)
         user = request.user
         reference = str(uuid.uuid4())
 
-        # Use named URL for callback instead of hardcoding
         callback_url = request.build_absolute_uri(
             reverse('verify_gift_payment')
         ) + f"?ref={reference}"
@@ -571,15 +572,15 @@ def initiate_gift_payment(request, event_id):
 
         data = {
             "email": user.email,
-            "amount": int(amount) * 100,  # Paystack expects subunits
+            "amount": int(gift_amount) * 100,  # Paystack requires amount in kobo/cent
             "reference": reference,
-            "currency": "KES",  # ✅ Important for Kenya
+            "currency": "KES",
             "callback_url": callback_url,
         }
 
-        # Store reference temporarily in session
+        # ✅ Save temporary session data
         request.session['gift_reference'] = reference
-        request.session['gift_amount'] = amount
+        request.session['gift_amount'] = gift_amount
         request.session['gift_event_id'] = event_id
 
         try:
@@ -637,26 +638,26 @@ def verify_gift_payment(request):
         logger.info(f"Gift verify response for {reference}: {res_data}")
 
         if res_data.get("status") and res_data["data"]["status"] == "success":
-            amount = request.session.get('gift_amount')
+            gift_amount = request.session.get('gift_amount')
+
             if not event:
                 return redirect("landing")
 
-            # Save gift
+            # ✅ Save Gift (no reference field)
             Gift.objects.create(
                 user=request.user,
                 event=event,
-                amount=amount,
-                reference=reference
+                amount=gift_amount,
             )
 
-            # Clear session
+            # ✅ Clear session data
             for key in ['gift_reference', 'gift_event_id', 'gift_amount']:
                 request.session.pop(key, None)
 
             messages.success(request, "Gift sent successfully! 🎁")
             return redirect("join_event", event_id=event.id)
 
-        # ❌ Payment failed → stay in event page
+        # ❌ Payment failed
         messages.error(request, "Gift payment was not successful.")
         if event:
             return redirect("join_event", event_id=event.id)
@@ -773,6 +774,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
