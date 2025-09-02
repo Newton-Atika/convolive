@@ -349,7 +349,7 @@ def create_conversation(request):
 
 logger = logging.getLogger(__name__)
 
-@login_required
+# @login_required
 def join_event(request, event_id):
     if not request.user.is_authenticated:
         return redirect('signup')
@@ -776,6 +776,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
