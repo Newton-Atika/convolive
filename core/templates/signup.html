@@ -120,6 +120,10 @@
     <h2>Sign Up</h2>
     <form method="post" id="signup-form">
         {% csrf_token %}
+
+        <!-- Carry the "next" parameter through POST -->
+        <input type="hidden" name="next" value="{{ next }}">
+
         {{ form.username.label_tag }} {{ form.username }}
         {% for error in form.username.errors %}
             <div class="errorlist">{{ error }}</div>
@@ -151,7 +155,7 @@
         </div>
 
         <div class="redirect-link">
-            Already have an account? <a href="{% url 'login' %}">Login here</a>
+            Already have an account? <a href="{% url 'login' %}{% if next %}?next={{ next }}{% endif %}">Login here</a>
         </div>
     </form>
 </div>
