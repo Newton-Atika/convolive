@@ -350,9 +350,12 @@ def create_conversation(request):
 logger = logging.getLogger(__name__)
 
 # @login_required
+from django.urls import reverse
+
 def join_event(request, event_id):
     if not request.user.is_authenticated:
-        return redirect('signup')
+        signup_url = f"{reverse('signup')}?next={request.path}"
+        return redirect(signup_url)
     event = get_object_or_404(Event, id=event_id)
 
     # Check if the event has ended
@@ -690,18 +693,27 @@ def manage_organizers(request):
 
     return render(request, 'manage_organizers.html', {'users': users})
 
+from django.urls import reverse
+
 def signup_view(request):
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request, user)
-            return redirect('landing')
+
+            # check if there's a next parameter
+            next_url = request.GET.get('next') or request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+            return redirect('landing')  # fallback
     else:
         form = CustomUserCreationForm()
-    return render(request, 'signup.html', {'form': form})
 
-
+    return render(request, 'signup.html', {
+        'form': form,
+        'next': request.GET.get('next', '')  # pass next into template (hidden field)
+    })
 def login_view(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
@@ -776,6 +788,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
