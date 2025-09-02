@@ -31,6 +31,8 @@ ASGI_APPLICATION = "convolive.asgi.application"
 
 # Application definition
 
+LOGIN_URL = '/signup/'
+
 INSTALLED_APPS = [
     'daphne','django.contrib.admin',
     'django.contrib.auth',
@@ -172,5 +174,6 @@ LIVEKIT_URL = 'wss://convolive-1v7m4e6q.livekit.cloud'
 LIVEKIT_API_KEY = "API3mLfygt68Dxs"
 LIVEKIT_API_SECRET = "nyDCJgfJ2OF8daESzSje8rrVJnZBWFzv5vXKZNeqF1oA"
 WEB_SOCKET_URL = "wss://convolive-1v7m4e6q.livekit.cloud"
+
 
 
