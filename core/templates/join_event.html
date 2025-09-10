@@ -86,9 +86,25 @@
             margin-top: 1rem;
             font-weight: bold;
         }
+        #gift-display {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #0f0;
+        text-align: center;
+        background: rgba(0,0,0,0.6);
+        padding: 8px 16px;
+        border-radius: 8px;
+        transition: opacity 1s ease-in-out;
+        opacity: 0;
+        z-index: 9999;
     </style>
 </head>
 <body>
+    <div id="gift-display"></div>
 {% if not event.is_live %}
 {% if not has_paid %}
 <div class="payment-warning">
@@ -190,6 +206,44 @@
 </div>
 {% endif %}
 <script>
+      // ✅ Get verified gifts (Django injects them here)
+    const gifts = [
+        {% for gift in verified_gifts %}
+            {
+                name: "{{ gift.user.username|escapejs }}",
+                amount: "{{ gift.amount }} KES"
+            },
+        {% endfor %}
+    ];
+
+    let index = 0;
+    const displayDiv = document.getElementById("gift-display");
+
+    function showNextGift() {
+        if (gifts.length === 0) return;
+
+        const gift = gifts[index];
+        displayDiv.innerHTML = `<strong>${gift.name}</strong> gifted <strong>${gift.amount}</strong>`;
+        
+        // Fade in
+        displayDiv.style.opacity = 0;
+        setTimeout(() => {
+            displayDiv.style.opacity = 1;
+        }, 100);
+
+        // Next gift
+        index = (index + 1) % gifts.length;
+
+        // Stay for 4s then fade out
+        setTimeout(() => {
+            displayDiv.style.opacity = 0;
+            setTimeout(showNextGift, 1000);
+        }, 4000);
+    }
+
+    if (gifts.length > 0) {
+        showNextGift();
+    }
 // Agora configuration
 const CHANNEL = '{{ event.id|escapejs }}';
 const isOrganizer = "{{ user.pk }}" === "{{ event.organizer.pk }}";
@@ -462,3 +516,4 @@ if (micBtn) {
 </script>
 </body>
 </html>
+
