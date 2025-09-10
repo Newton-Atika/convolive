@@ -791,20 +791,42 @@ def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
 
+from django.shortcuts import render
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def business_model_view(request):
+    context = {
+        "title": "Livehub Streamer Technology",
+        "business_model": "Livehub is a Kenyan-based live streaming platform for influencers and creators.",
+        "business_points": [
+            "Live – Free live streaming where audience supports hosts by gifting.",
+            "Live Show – Paid entry + gifting option for creators."
+        ],
+        "operations": [
+            "Viewers pay KES 60 to join a Live Show.",
+            "Audiences can send gifts during sessions.",
+            "Live Shows advised to be ~30 minutes.",
+            "Standard Live remains open with gifts only."
+        ],
+        "strategy": [
+            "Promote Live Show on social media.",
+            "Share show name, time, and link for higher attendance."
+        ],
+        "revenue_model": [
+            {"stream": "Joining Fee", "influencer": "50%", "platform": "50%"},
+            {"stream": "Gift Revenue", "influencer": "80%", "platform": "20%"},
+        ],
+        "future_outlook": "Livehub aims to partner with brands and advertisers. Hosts should keep content positive and brand-safe.",
+        "data_collection": [
+            "Payment Data – for access & revenue.",
+            "User Data – usernames, emails, encrypted passwords.",
+            "Comments – stored temporarily, deleted after session.",
+            "Likes – used as engagement metrics.",
+            "Event data deleted after host revenue settlement."
+        ],
+        "onboarding": [
+            "Register on Livehub.",
+            "Contact us at 0745 570 557 for verification.",
+            "Social media evaluation for audience engagement."
+        ]
+    }
+    return render(request, "business_model.html", context)
