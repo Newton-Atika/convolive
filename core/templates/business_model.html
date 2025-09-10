@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Livehub Business Model</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 2rem;
+        }
+        h1, h2 {
+            color: #0f0;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            color: #fff;
+            margin-top: 1.5rem;
+            border-left: 4px solid #0f0;
+            padding-left: 0.5rem;
+        }
+        p, li {
+            line-height: 1.6;
+        }
+        ul {
+            margin-left: 1.5rem;
+        }
+        .highlight {
+            color: #0f0;
+            font-weight: bold;
+        }
+        .table-box {
+            background: #111;
+            border: 1px solid #0f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #fff;
+        }
+        th, td {
+            border: 1px solid #0f0;
+            padding: 0.5rem;
+            text-align: center;
+        }
+        th {
+            background: #0f0;
+            color: #000;
+        }
+        .footer {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #111;
+            text-align: center;
+            border-top: 1px solid #0f0;
+        }
+        .contact {
+            color: #0f0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{{ title }}</h1>
+        <h2>Business Model</h2>
+        <p>{{ business_model }}</p>
+        <ul>
+            {% for item in business_points %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Operations</h2>
+        <ul>
+            {% for op in operations %}
+                <li>{{ op }}</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Creator Strategy</h2>
+        <ul>
+            {% for tip in strategy %}
+                <li>{{ tip }}</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Partnership Benefits</h2>
+        <div class="table-box">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Income Stream</th>
+                        <th>Influencer Share</th>
+                        <th>Platform Share</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in revenue_model %}
+                    <tr>
+                        <td>{{ row.stream }}</td>
+                        <td>{{ row.influencer }}</td>
+                        <td>{{ row.platform }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h2>Future Outlook</h2>
+        <p>{{ future_outlook }}</p>
+
+        <h2>Data Collection & Privacy</h2>
+        <ul>
+            {% for d in data_collection %}
+                <li>{{ d }}</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Organizer Onboarding</h2>
+        <ol>
+            {% for step in onboarding %}
+                <li>{{ step }}</li>
+            {% endfor %}
+        </ol>
+
+        <div class="footer">
+            📞 Contact us: <span class="contact">0745 570 557</span>
+        </div>
+    </div>
+</body>
+</html>
