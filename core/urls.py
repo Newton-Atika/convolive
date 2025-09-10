@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path('', views.landing_page, name='landing'),
+    path("business-model/", views.business_model_view, name="business_model")
     path('get-agora-token/', views.get_agora_token, name='get_agora_token'),
     path('signup/', views.signup_view, name='signup'),
     path('login/', views.login_view, name='login'),
@@ -23,3 +24,4 @@ urlpatterns = [
     path('stream/<int:event_id>/', views.stream_view, name='stream'),
     path('toggle-like/', views.toggle_like, name='toggle_like'),
 ]
+
