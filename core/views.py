@@ -799,16 +799,16 @@ def business_model_view(request):
         "business_model": "Livehub is a Kenyan-based live streaming platform for influencers and creators.",
         "business_points": [
             "Live – Free live streaming where audience supports hosts by gifting.",
-            "Live Show – Paid entry + gifting option for creators."
+            "Live Show – Advernced Live where audience support by not only gifting but also a one-time entry fee"
         ],
         "operations": [
             "Viewers pay KES 60 to join a Live Show.",
             "Audiences can send gifts during sessions.",
-            "Live Shows advised to be ~30 minutes.",
-            "Standard Live remains open with gifts only."
+            "Live Shows advised to be about 30 minutes long.",
+            "Standard Live remains open with only gifts as revenue source."
         ],
         "strategy": [
-            "Promote Live Show on social media.",
+            "Promote Live Show on your social media.",
             "Share show name, time, and link for higher attendance."
         ],
         "revenue_model": [
@@ -817,16 +817,17 @@ def business_model_view(request):
         ],
         "future_outlook": "Livehub aims to partner with brands and advertisers. Hosts should keep content positive and brand-safe.",
         "data_collection": [
-            "Payment Data – for access & revenue.",
-            "User Data – usernames, emails, encrypted passwords.",
+            "Payment Data – for access & revenue tracking.",
+            "User Data – usernames, emails, encrypted passwords for user sensitive experience.",
             "Comments – stored temporarily, deleted after session.",
-            "Likes – used as engagement metrics.",
-            "Event data deleted after host revenue settlement."
+            "Likes – used as engagement performance evaluation metrics.",
+            "Event - data is deleted after host confirms event revenue is settled."
         ],
         "onboarding": [
-            "Register on Livehub.",
-            "Contact us at 0745 570 557 for verification.",
-            "Social media evaluation for audience engagement."
+            "Register by signing up on Live conversation.",
+            "Contact us at 0745 570 557 for rights to start hosting your live aand shows",
+            "Your social media page will help us evaluate if you have an initiall audience"
         ]
     }
     return render(request, "business_model.html", context)
+
