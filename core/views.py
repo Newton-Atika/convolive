@@ -357,6 +357,7 @@ def join_event(request, event_id):
         signup_url = f"{reverse('signup')}?next={request.path}"
         return redirect(signup_url)
     event = get_object_or_404(Event, id=event_id)
+    verified_gifts = Gift.objects.filter(event=event).select_related("user")
 
     # Check if the event has ended
     try:
@@ -397,6 +398,7 @@ def join_event(request, event_id):
 
     return render(request, 'index.html', {
         'event': event,
+        "verified_gifts": verified_gifts,
         'has_paid': has_paid,
         'participants': participants,
         'participant_count': participant_count,
@@ -788,6 +790,7 @@ def toggle_like(request):
 def stream_view(request, event_id):
     event = get_object_or_404(Event, id=event_id)
     return render(request, 'stream.html', {'event': event})
+
 
 
 
