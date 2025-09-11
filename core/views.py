@@ -809,7 +809,7 @@ def business_model_view(request):
         ],
         "strategy": [
             "Promote Live Show on your social media accounts such as tiktok, youtube and instagram.",
-            "Share2wq show name, time, and link for higher attendance."
+            "Share show name, time, and link for higher attendance."
         ],
         "revenue_model": [
             {"stream": "Joining Fee", "influencer": "50%", "platform": "50%"},
@@ -830,5 +830,6 @@ def business_model_view(request):
         ]
     }
     return render(request, "business_model.html", context)
+
 
 
