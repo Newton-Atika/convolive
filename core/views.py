@@ -795,11 +795,11 @@ from django.shortcuts import render
 
 def business_model_view(request):
     context = {
-        "title": "Livehub Streamer Technology",
-        "business_model": "Livehub is a Kenyan-based live streaming platform for influencers and creators.",
+        "title": "Live Conversation",
+        "business_model": "Live conversation is a Kenyan-based live streaming platform for influencers and creators.",
         "business_points": [
             "Live – Free live streaming where audience supports hosts by gifting.",
-            "Live Show – Advernced Live where audience support by not only gifting but also a one-time entry fee"
+            "Live Show – Advanced Live where audience support by not only by gifting but also a one-time joining fee of 60 bob"
         ],
         "operations": [
             "Viewers pay KES 60 to join a Live Show.",
@@ -808,14 +808,14 @@ def business_model_view(request):
             "Standard Live remains open with only gifts as revenue source."
         ],
         "strategy": [
-            "Promote Live Show on your social media.",
-            "Share show name, time, and link for higher attendance."
+            "Promote Live Show on your social media accounts such as tiktok, youtube and instagram.",
+            "Share2wq show name, time, and link for higher attendance."
         ],
         "revenue_model": [
             {"stream": "Joining Fee", "influencer": "50%", "platform": "50%"},
             {"stream": "Gift Revenue", "influencer": "80%", "platform": "20%"},
         ],
-        "future_outlook": "Livehub aims to partner with brands and advertisers. Hosts should keep content positive and brand-safe.",
+        "future_outlook": "Live conversation aims to partner with brands and advertisers. Hosts should keep content positive and brand-safe.",
         "data_collection": [
             "Payment Data – for access & revenue tracking.",
             "User Data – usernames, emails, encrypted passwords for user sensitive experience.",
@@ -825,9 +825,10 @@ def business_model_view(request):
         ],
         "onboarding": [
             "Register by signing up on Live conversation.",
-            "Contact us at 0745 570 557 for rights to start hosting your live aand shows",
-            "Your social media page will help us evaluate if you have an initiall audience"
+            "Contact us at 0745 770 557 for rights to start hosting your live and shows",
+            "Your social media page will help us evaluate if you have an initial audience"
         ]
     }
     return render(request, "business_model.html", context)
+
 
