@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <title>{{ event.title }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Agora RTC -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.23.1.js"></script>
+    <!-- Agora RTM (Signaling) -->
+    <script src="https://cdn.jsdelivr.net/npm/agora-rtm-sdk@1.4.4/index.js"></script>
+
     <style>
         body {
             background-color: #000;
@@ -16,11 +20,18 @@
             max-width: 900px;
             margin: auto;
             padding: 0.5rem;
+            position: relative;
         }
         h1 {
             font-size: 1.5rem;
-            margin: 0.5rem 0;
+            margin: 0.2rem 0;
             text-align: center;
+        }
+        .organizer-name {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #ccc;
+            margin-bottom: 0.6rem;
         }
         .video-box {
             width: 100%;
@@ -30,6 +41,7 @@
             text-align: center;
             border: 2px solid #333;
             margin-bottom: 0.5rem;
+            position: relative;
         }
         #agora-video {
             width: 100%;
@@ -48,10 +60,32 @@
             position: absolute;
             top: 0;
             left: 0;
+            transform-origin: center center;
+            transition: transform 250ms ease;
+            -webkit-transition: -webkit-transform 250ms ease;
         }
         #localVideo, #remoteVideo {
             display: none;
         }
+
+        /* viewer count top-right */
+        .viewer-bubble {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 10px;
+            border-radius: 20px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 20;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
         .tab-bar {
             display: flex;
             justify-content: flex-start;
@@ -75,144 +109,61 @@
             cursor: pointer;
             font-size: 0.9rem;
         }
-        .tab:hover {
-            background-color: #e0e0e0;
-        }
-        .tab.active {
-            background-color: #666;
+        .tab:hover { background-color: #e0e0e0; }
+        .tab.active { background-color: #666; color: #fff; }
+        .tab span { margin-left: 0.3rem; }
+        .tab-content { display: none; background-color: #111; padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem; }
+        .tab-content.active { display: block; }
+        .chat { background-color: #111; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;}
+        .chat p { margin: 0.5rem 0; padding: 0.5rem; border-radius: 5px; }
+        .chat p.own-message { background-color: #555; }
+        input, select, button { padding: 0.5rem; border: none; border-radius: 5px; margin: 0.2rem; }
+        input { background-color: #222; color: #fff; }
+        .chat-input-container { display: flex; width: 100%; gap: 0.2rem; align-items: center; }
+        #messageInput { flex: 1; }
+        #sendBtn { background-color: limegreen; color: #000; font-weight: bold; }
+        #sendGiftBtn { background-color: orange; color: #000; font-weight: bold; font-size: 0.8rem; }
+        /* changed: small gift text */
+        #sendGiftBtn.small { font-size: 0.75rem; padding: 0.35rem 0.6rem; }
+
+        #endLiveBtn { background-color: red; color: white; padding: 0.4rem 0.8rem; font-size: 0.9rem; font-weight: bold; }
+        #leaveChatBtn { background-color: #fff; color: #000; padding: 0.5rem 1rem; border-radius: 5px; font-size: 0.9rem; cursor: pointer; }
+        #leaveChatBtn:hover { background-color: #e0e0e0; }
+
+        .reaction-btn { background-color: #000; color: white; border: 2px solid red; font-weight: bold; transition: background 0.3s, color 0.3s; cursor: pointer; padding: 0.5rem 0.8rem; margin: 0.2rem; }
+        .reaction-btn.liked-btn { background-color: red; color: #fff; }
+
+        .viewer-count { margin-bottom: 0.5rem; }
+
+        .float-emoji { position: absolute; top: 50%; right: 10px; font-size: 1.5rem; animation: float 4s ease-in-out forwards; }
+        .float-emoji-alt { position: absolute; top: 50%; right: 10px; font-size: 1.5rem; animation: float-alt 4s ease-in-out forwards; }
+        @keyframes float { 0% { opacity: 1; transform: translateY(0) translateX(0); } 25% { transform: translateY(-25vh) translateX(20px); } 50% { transform: translateY(-50vh) translateX(-20px); } 75% { transform: translateY(-75vh) translateX(20px); } 100% { opacity: 0; transform: translateY(-100vh) translateX(0); } }
+        @keyframes float-alt { 0% { opacity: 1; transform: translateY(0) translateX(0); } 25% { transform: translateY(-25vh) translateX(10px); } 50% { transform: translateY(-50vh) translateX(-10px); } 75% { transform: translateY(-75vh) translateX(10px); } 100% { opacity: 0; transform: translateY(-100vh) translateX(0); } }
+
+        /* join-notification at bottom */
+        .join-notice {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 18px;
+            background: rgba(0,0,0,0.75);
             color: #fff;
-        }
-        .tab span {
-            margin-left: 0.3rem;
-        }
-        .tab-content {
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            z-index: 9999;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.06);
             display: none;
-            background-color: #111;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 0.5rem;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .chat {
-            background-color: #111;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 0.5rem;
-        }
-        .chat p {
-            margin: 0.5rem 0;
-            padding: 0.5rem;
-            border-radius: 5px;
-        }
-        .chat p.own-message {
-            background-color: #555;
-        }
-        input, select, button {
-            padding: 0.5rem;
-            border: none;
-            border-radius: 5px;
-            margin: 0.2rem;
-        }
-        input {
-            background-color: #222;
-            color: #fff;
-        }
-        .chat-input-container {
-            display: flex;
-            width: 100%;
-            gap: 0.2rem;
-            align-items: center;
-        }
-        #messageInput {
-            flex: 1;
-        }
-        #sendBtn, #sendGiftBtn {
-            background-color: limegreen;
-            color: #000;
-            font-weight: bold;
-        }
-        #sendGiftBtn {
-            background-color: orange;
-        }
-        #endLiveBtn {
-            background-color: red;
-            color: white;
-            padding: 0.4rem 0.8rem;
-            font-size: 0.9rem;
-            font-weight: bold;
-        }
-        #leaveChatBtn {
-            background-color: #fff;
-            color: #000;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
-        #leaveChatBtn:hover {
-            background-color: #e0e0e0;
-        }
-        .reaction-btn {
-            background-color: #000;
-            color: white;
-            border: 2px solid red;
-            font-weight: bold;
-            transition: background 0.3s, color 0.3s;
-            cursor: pointer;
-            padding: 0.5rem 0.8rem;
-            margin: 0.2rem;
-        }
-        .reaction-btn.liked-btn {
-            background-color: red;
-            color: #fff;
-        }
-        .viewer-count {
-            margin-bottom: 0.5rem;
-        }
-        .float-emoji {
-            position: absolute;
-            top: 50%;
-            right: 10px;
-            font-size: 1.5rem;
-            animation: float 4s ease-in-out forwards;
-        }
-        .float-emoji-alt {
-            position: absolute;
-            top: 50%;
-            right: 10px;
-            font-size: 1.5rem;
-            animation: float-alt 4s ease-in-out forwards;
-        }
-        @keyframes float {
-            0% { opacity: 1; transform: translateY(0) translateX(0); }
-            25% { transform: translateY(-25vh) translateX(20px); }
-            50% { transform: translateY(-50vh) translateX(-20px); }
-            75% { transform: translateY(-75vh) translateX(20px); }
-            100% { opacity: 0; transform: translateY(-100vh) translateX(0); }
-        }
-        @keyframes float-alt {
-            0% { opacity: 1; transform: translateY(0) translateX(0); }
-            25% { transform: translateY(-25vh) translateX(10px); }
-            50% { transform: translateY(-50vh) translateX(-10px); }
-            75% { transform: translateY(-75vh) translateX(10px); }
-            100% { opacity: 0; transform: translateY(-100vh) translateX(0); }
-        }
-        @media (max-width: 600px) {
-            #agora-video {
-                max-height: 60vh;
-            }
-            .container {
-                padding: 0.3rem;
-            }
-            .tab {
-                padding: 0.4rem 0.8rem;
-                font-size: 0.8rem;
-            }
         }
 
-        /* 🔵 Added: Switch Camera button style (organizer only) */
+        @media (max-width: 600px) {
+            #agora-video { max-height: 60vh; }
+            .container { padding: 0.3rem; }
+            .tab { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        }
+
+        /* 🔵 Switch Camera button style (organizer only) */
         #switchCameraBtn {
             background-color: dodgerblue;
             color: #fff;
@@ -222,31 +173,31 @@
             border-radius: 5px;
             cursor: pointer;
         }
-        #switchCameraBtn[disabled] {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        #switchCameraBtn[disabled] { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
 {% if user.is_authenticated %}
     {% if not event.is_live %}
         {% if has_paid %}
-            <!-- Conversation Event: User has paid -->
             <div class="container">
                 <h1>🎥 {{ event.title }}</h1>
+                <div class="organizer-name">Organizer: <strong>{{ event.organizer.username }}</strong></div>
+
                 <div class="video-box">
                     <div id="agora-video">
-                        <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
-                        <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
+                        <div class="viewer-bubble" id="viewerBubble">👁️ 0</div>
+                        <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
+                        <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
                     </div>
                 </div>
+
                 <div class="tab-bar">
                     <div class="tab" data-target="reactions">❤️ <span>Reactions</span></div>
                     <div class="tab" data-target="gifts">🎁 <span>Gifts</span></div>
                     <div class="tab" data-target="chat">💬 <span>Messages</span></div>
+
                     {% if user.pk == event.organizer.pk %}
-                        <!-- 🔵 Added: Switch Camera button for organizer -->
                         <button id="switchCameraBtn" class="tab" title="Switch between front/back cameras">🔄 Switch Camera</button>
                         <form method="post" action="{% url 'end_event' event.id %}">
                             {% csrf_token %}
@@ -255,6 +206,7 @@
                     {% endif %}
                     <button id="leaveChatBtn" class="tab">🔴 Leave Live</button>
                 </div>
+
                 <div id="reactions" class="tab-content">
                     <div class="reaction-buttons">
                         <button id="likeBtn" class="reaction-btn" data-emoji="❤️" data-is-heart="true">❤️ Like (<span id="likeCount">0</span>)</button>
@@ -266,6 +218,7 @@
                         <button class="reaction-btn" data-emoji="💔" data-is-heart="false">💔</button>
                     </div>
                 </div>
+
                 <div id="gifts" class="tab-content">
                     <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
                         {% csrf_token %}
@@ -274,9 +227,10 @@
                             <option value="20">🍫 Chocolate (20 KES)</option>
                             <option value="50">⭐ Star (50 KES)</option>
                         </select>
-                        <button type="submit" id="sendGiftBtn">Send Gift</button>
+                        <button type="submit" id="sendGiftBtn" class="small">Send via Saf/airtel</button>
                     </form>
                 </div>
+
                 <div id="chat" class="tab-content">
                     <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
                     <div class="chat-input-container">
@@ -284,6 +238,7 @@
                         <button id="sendBtn">Send</button>
                     </div>
                 </div>
+
                 <div class="viewer-count">
                     {% if user.pk == event.organizer.pk and participants %}
                         👁️ Viewers: {{ participants|length }}
@@ -295,29 +250,32 @@
                     {% endif %}
                 </div>
             </div>
+
         {% else %}
-            <!-- Conversation Event: User has not paid -->
             <div class="payment-warning">
                 ⚠️ You need to pay <strong>50 KES</strong> to join this conversation.
                 <a href="{% url 'pay_event' event.id %}" class="pay-button">Pay with Paystack</a>
             </div>
         {% endif %}
     {% else %}
-        <!-- Live Event: Show everything, no payment required -->
+        <!-- Live branch: same structure (omitted duplicate for brevity) -->
         <div class="container">
             <h1>🎥 {{ event.title }}</h1>
+            <div class="organizer-name">Organizer: <strong>{{ event.organizer.username }}</strong></div>
+
             <div class="video-box">
                 <div id="agora-video">
-                    <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
-                    <video id="remoteVideo" autoplay playsinline style="display: none;"></video>
+                    <div class="viewer-bubble" id="viewerBubble">👁️ 0</div>
+                    <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
+                    <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
                 </div>
             </div>
+
             <div class="tab-bar">
                 <div class="tab" data-target="reactions">❤️ <span>Reactions</span></div>
                 <div class="tab" data-target="gifts">🎁 <span>Gifts</span></div>
                 <div class="tab" data-target="chat">💬 <span>Messages</span></div>
                 {% if user.pk == event.organizer.pk %}
-                    <!-- 🔵 Added: Switch Camera button for organizer (live branch) -->
                     <button id="switchCameraBtn" class="tab" title="Switch between front/back cameras">🔄 Switch Camera</button>
                     <form method="post" action="{% url 'end_event' event.id %}">
                         {% csrf_token %}
@@ -326,6 +284,7 @@
                 {% endif %}
                 <button id="leaveChatBtn" class="tab">🔴 Leave Live</button>
             </div>
+
             <div id="reactions" class="tab-content">
                 <div class="reaction-buttons">
                     <button id="likeBtn" class="reaction-btn" data-emoji="❤️" data-is-heart="true">❤️ Like (<span id="likeCount">0</span>)</button>
@@ -337,6 +296,7 @@
                     <button class="reaction-btn" data-emoji="💔" data-is-heart="false">💔</button>
                 </div>
             </div>
+
             <div id="gifts" class="tab-content">
                 <form id="giftForm" method="POST" action="/events/{{ event.id }}/gift/">
                     {% csrf_token %}
@@ -345,9 +305,10 @@
                         <option value="20">🍫 Chocolate (20 KES)</option>
                         <option value="50">⭐ Star (50 KES)</option>
                     </select>
-                    <button type="submit" id="sendGiftBtn">Send Gift</button>
+                    <button type="submit" id="sendGiftBtn" class="small">Send via Saf/airtel</button>
                 </form>
             </div>
+
             <div id="chat" class="tab-content">
                 <div id="chatArea" style="height:150px;overflow-y:auto;"></div>
                 <div class="chat-input-container">
@@ -355,6 +316,7 @@
                     <button id="sendBtn">Send</button>
                 </div>
             </div>
+
             <div class="viewer-count">
                 {% if user.pk == event.organizer.pk and participants %}
                     👁️ Viewers: {{ participants|length }}
@@ -373,58 +335,443 @@
     </div>
 {% endif %}
 
-    <script>
-        const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
-        const CHANNEL = '{{ event.id|escapejs }}';
-        const isOrganizer = {{ is_organizer|safe }};
-        const eventIsLive = {{ event.is_live|lower|safe }};
-        const hasPaid = {{ has_paid|lower|safe }};
-        const user = "{{ request.user.username|escapejs }}";
-        const eventId = "{{ event.id|escapejs }}";
-        const wsScheme = location.protocol === "https:" ? "wss" : "ws";
-        const rtc = {
-            client: null,
-            localAudioTrack: null,
-            localVideoTrack: null,
+<!-- ephemeral join notification -->
+<div id="joinNotice" class="join-notice"></div>
 
-            /* 🔵 Added: camera management state */
-            cameras: [],
-            currentCameraIndex: 0
+<script>
+    const APP_ID = '5a7551a1892a47258b7e9f7f264e6196';
+    const CHANNEL = '{{ event.id|escapejs }}';
+    const isOrganizer = {{ is_organizer|safe }};
+    const eventIsLive = {{ event.is_live|lower|safe }};
+    const hasPaid = {{ has_paid|lower|safe }};
+    const user = "{{ request.user.username|escapejs }}";
+    const eventId = "{{ event.id|escapejs }}";
+    const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+
+    const rtc = {
+        client: null,
+        localAudioTrack: null,
+        localVideoTrack: null,
+        cameras: [],
+        currentCameraIndex: 0,
+        isFrontCamera: false
+    };
+
+    // RTM (signaling) objects
+    let rtmClient = null;
+    let rtmChannel = null;
+
+    // your existing sockets
+    let socket, chatSocket, likeSocket;
+    let localMicStream = null;
+    let liked = false;
+
+    // viewer count UI
+    const viewerBubbleEl = () => document.getElementById('viewerBubble');
+    const joinNoticeEl = () => document.getElementById('joinNotice');
+
+    async function initializeRTM() {
+        try {
+            // create RTM instance
+            rtmClient = AgoraRTM.createInstance(APP_ID);
+
+            // Note: for production use RTM token from server (here using null)
+            await rtmClient.login({ token: null, uid: user || String(Math.floor(Math.random() * 100000)) });
+
+            // optionally set local attribute so others can fetch your username
+            try {
+                await rtmClient.setLocalUserAttributes([{ key: 'username', value: user }]);
+            } catch (err) { console.warn('setLocalUserAttributes failed', err); }
+
+            rtmChannel = await rtmClient.createChannel(String(CHANNEL));
+            await rtmChannel.join();
+
+            // get initial members (viewer count)
+            try {
+                const members = await rtmChannel.getMembers();
+                updateViewerCount(members ? members.length : 0);
+            } catch (err) {
+                console.warn('rtm getMembers failed', err);
+            }
+
+            // When a member joins
+            rtmChannel.on('MemberJoined', async (memberId) => {
+                // update count
+                try {
+                    const members = await rtmChannel.getMembers();
+                    updateViewerCount(members.length);
+                } catch (e){ console.warn('getMembers after join failed', e); }
+
+                // try to get username attribute
+                let nameToShow = memberId;
+                try {
+                    const attrs = await rtmClient.getUserAttributesByKeys(memberId, ['username']);
+                    if (attrs && attrs.username) nameToShow = attrs.username;
+                } catch (err) {
+                    // fallback — just use id
+                }
+
+                // show ephemeral join notice (3s or until next)
+                showJoinNotice(`${nameToShow} joined`);
+            });
+
+            // When a member leaves
+            rtmChannel.on('MemberLeft', async (memberId) => {
+                try {
+                    const members = await rtmChannel.getMembers();
+                    updateViewerCount(members.length);
+                } catch (e){ console.warn('getMembers after left failed', e); }
+            });
+
+            // optional: channel messages (not used here but available)
+            rtmChannel.on('ChannelMessage', (message, memberId) => {
+                // handle custom channel messages if needed
+                // console.log('rtm channel message', message, memberId);
+            });
+
+            rtmClient.on('MessageFromPeer', (message, peerId) => {
+                // direct peer messages if needed
+            });
+
+        } catch (err) {
+            console.error('RTM init error', err);
+        }
+    }
+
+    function updateViewerCount(count) {
+        const el = viewerBubbleEl();
+        if (el) el.innerText = `👁️ ${count}`;
+    }
+
+    let joinNoticeTimeout = null;
+    function showJoinNotice(text) {
+        const el = joinNoticeEl();
+        if (!el) return;
+        el.textContent = text;
+        el.style.display = 'block';
+        if (joinNoticeTimeout) clearTimeout(joinNoticeTimeout);
+        joinNoticeTimeout = setTimeout(() => { el.style.display = 'none'; joinNoticeTimeout = null; }, 3000);
+    }
+
+    // WebSocket initializers (kept mostly as you had)
+    function initializeWebSockets() {
+        socket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${CHANNEL}/`);
+        socket.onopen = () => {
+            console.log("✅ Stream WebSocket connected");
+            if (isOrganizer) socket.send(JSON.stringify({ type: "live_started" }));
         };
-        let socket;
-        let chatSocket;
-        let likeSocket;
-        let localMicStream = null;
-        let liked = false;
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log("📡 Stream WebSocket message:", data);
+            if (data.type === "live_started" && !isOrganizer) initAgora();
+        };
+        socket.onerror = (error) => console.error("❌ Stream WebSocket error:", error);
+        socket.onclose = (event) => {
+            console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            setTimeout(() => initializeWebSockets(), 3000);
+        };
 
-        function initializeWebSockets() {
-            socket = new WebSocket(`${wsScheme}://${location.host}/ws/stream/${CHANNEL}/`);
-            socket.onopen = () => {
-                console.log("✅ Stream WebSocket connected");
-                if (isOrganizer) {
-                    socket.send(JSON.stringify({ type: "live_started" }));
+        chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
+        chatSocket.onopen = () => console.log(`✅ Chat WebSocket connected (${eventId})`);
+        chatSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const chatArea = document.getElementById("chatArea");
+            if (data.type === "chat") {
+                const p = document.createElement("p");
+                const isOwnMessage = data.username === user;
+                p.className = isOwnMessage ? "own-message" : "";
+                p.innerHTML = `<strong>@${data.username}</strong>: ${data.message}`;
+                chatArea.appendChild(p);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            } else if (data.type === "mic_request" && isOrganizer) {
+                const li = document.createElement("li");
+                li.id = `mic-${data.username}`;
+                li.innerHTML = `<button onclick="approveMic('${data.username}')">✅</button>
+                                <button onclick="denyMic('${data.username}')">❌</button>`;
+                document.getElementById("requestList")?.appendChild(li);
+            } else if (data.type === "mic_approved") {
+                if (!isOrganizer && data.username === user) {
+                    navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+                        .then(stream => {
+                            localMicStream = stream;
+                            const video = document.getElementById("remoteVideo");
+                            video.srcObject = stream;
+                            video.style.display = "block";
+                            floatEmoji("🎤🎥 You are live!", false);
+                        })
+                        .catch(err => { console.error("Media access error:", err); alert("Could not access camera/microphone."); });
+                } else {
+                    document.getElementById(`mic-${data.username}`)?.remove();
                 }
-            };
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                console.log("📡 Stream WebSocket message:", data);
-                if (data.type === "live_started" && !isOrganizer) {
-                    initAgora();
-                }
-            };
-            socket.onerror = (error) => console.error("❌ Stream WebSocket error:", error);
-            socket.onclose = (event) => {
-                console.warn(`⚠️ Stream WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(() => initializeWebSockets(), 3000);
-            };
+            } else if (data.type === "mic_denied") {
+                if (data.username === user) alert("❌ Your mic request was denied.");
+                document.getElementById(`mic-${data.username}`)?.remove();
+            } else if (data.type === "mic_revoked" && data.username === user) {
+                if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+                localMicStream = null;
+                const video = document.getElementById("remoteVideo");
+                video.srcObject = null;
+                video.style.display = "none";
+                alert("🔇 Your mic/video access was revoked.");
+            } else if (data.type === "mute_user" && data.username === user) {
+                alert("🔇 You have been muted by the organizer.");
+            }
+        };
+        chatSocket.onerror = (error) => { console.error("❌ Chat WebSocket error:", error); alert("Chat connection error."); };
+        chatSocket.onclose = (event) => {
+            console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            if (event.code === 4001) { alert("Chat unavailable: Payment required."); window.location.href = "{% url 'pay_event' event.id %}"; }
+            else if (event.code === 4000) { alert("Chat unavailable: Event does not exist."); }
+            else setTimeout(reconnectChatSocket, 2000);
+        };
 
+        likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
+        likeSocket.onopen = () => console.log(`✅ Like WebSocket connected (${eventId})`);
+        likeSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "like_update") {
+                document.getElementById("likeCount").innerText = data.total_likes;
+                floatEmoji("❤️", true);
+            } else if (data.type === "reaction") {
+                floatEmoji(data.emoji, data.emoji === "❤️");
+            } else if (data.type === "gift") {
+                const p = document.createElement("p");
+                p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
+                p.style.color = "orange";
+                p.className = data.user === user ? "own-message" : "";
+                document.getElementById("chatArea")?.appendChild(p);
+                floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
+            } else if (data.type === "live_started") {
+                document.getElementById("videoPlaceholder")?.remove();
+                initAgora();
+            }
+        };
+        likeSocket.onerror = (error) => console.error("❌ Like WebSocket error:", error);
+        likeSocket.onclose = (event) => { console.warn(`Like WS closed: ${event.code}`); setTimeout(reconnectLikeSocket, 2000); };
+    }
+
+    // mirror & rotation helpers:
+    function getDeviceRotationAngle() {
+        // Prefer Screen Orientation API
+        if (screen && screen.orientation && typeof screen.orientation.angle === 'number') {
+            return screen.orientation.angle;
+        }
+        // fallback
+        if (typeof window.orientation === 'number') return window.orientation;
+        return 0;
+    }
+
+    function applyVideoTransform(videoEl, isFront) {
+        // rotate according to device angle and mirror front camera if needed
+        const angle = getDeviceRotationAngle() || 0;
+        // normalize angle to 0/90/180/270
+        const normalized = ((angle % 360) + 360) % 360;
+        let transformParts = [];
+        if (normalized) transformParts.push(`rotate(${normalized}deg)`);
+        if (isFront) transformParts.push('scaleX(-1)');
+        // join reverse order so rotate happens first visually
+        videoEl.style.transform = transformParts.join(' ');
+    }
+
+    /* 🔵 Added: Switch camera function for organizer with mirror/rotation handling */
+    async function switchCamera() {
+        try {
+            if (!rtc.localVideoTrack) { alert("Camera not ready yet."); return; }
+            if (!rtc.cameras || rtc.cameras.length < 2) { alert("Only one camera detected."); return; }
+
+            rtc.currentCameraIndex = (rtc.currentCameraIndex + 1) % rtc.cameras.length;
+            const cam = rtc.cameras[rtc.currentCameraIndex];
+            const nextDeviceId = cam.deviceId;
+            // determine if next is front using label heuristics
+            const lower = (cam.label || '').toLowerCase();
+            rtc.isFrontCamera = lower.includes('front') || lower.includes('user') || lower.includes('selfie');
+
+            await rtc.localVideoTrack.setDevice(nextDeviceId);
+            console.log("🔄 Switched to:", cam.label || nextDeviceId);
+
+            // apply visual transform for mirror + rotation
+            const localVideo = document.getElementById('localVideo');
+            applyVideoTransform(localVideo, rtc.isFrontCamera);
+
+        } catch (err) {
+            console.error("Switch camera error:", err);
+            alert("Could not switch camera.");
+        }
+    }
+
+    async function initAgora() {
+        if (rtc.client) return;
+        try {
+            const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch token: ${errorText}`);
+            }
+            const { token, uid, role } = await response.json();
+            console.log(`Agora Token: ${token}, UID: ${uid}, Role: ${role}`);
+
+            rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+            await rtc.client.join(APP_ID, CHANNEL, token, uid);
+
+            rtc.client.on("user-published", async (userObj, mediaType) => {
+                try {
+                    await rtc.client.subscribe(userObj, mediaType);
+                    if (mediaType === "video") {
+                        const remoteVideo = document.getElementById("remoteVideo");
+                        userObj.videoTrack.play(remoteVideo);
+                        remoteVideo.style.display = "block";
+                        console.log("Subscribed to remote video track");
+                    }
+                    if (mediaType === "audio") {
+                        userObj.audioTrack.play();
+                        console.log("Subscribed to remote audio track");
+                    }
+                } catch (err) {
+                    console.error("Subscription error:", err);
+                    alert(`Failed to subscribe to ${mediaType}: ${err.message}`);
+                }
+            });
+
+            rtc.client.on("user-unpublished", (userObj, mediaType) => {
+                if (mediaType === "video") {
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    remoteVideo.style.display = "none";
+                    console.log("Remote video unpublished");
+                }
+            });
+
+            if (isOrganizer) {
+                await rtc.client.setClientRole("host");
+                try {
+                    rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+
+                    // enumerate cameras
+                    rtc.cameras = await AgoraRTC.getCameras();
+                    let initialIndex = 0;
+                    const frontIdx = rtc.cameras.findIndex(c =>
+                        (c.label || "").toLowerCase().includes("front") ||
+                        (c.label || "").toLowerCase().includes("user") ||
+                        (c.label || "").toLowerCase().includes("selfie")
+                    );
+                    if (frontIdx >= 0) initialIndex = frontIdx;
+                    rtc.currentCameraIndex = Math.max(0, initialIndex);
+
+                    rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                        cameraId: rtc.cameras[rtc.currentCameraIndex]?.deviceId,
+                        encoderConfig: "720p_3"
+                    });
+
+                    // set isFrontCamera flag based on label
+                    const currentCamLabel = rtc.cameras[rtc.currentCameraIndex]?.label || '';
+                    rtc.isFrontCamera = (currentCamLabel.toLowerCase().includes('front') || currentCamLabel.toLowerCase().includes('user') || currentCamLabel.toLowerCase().includes('selfie'));
+
+                    const localVideo = document.getElementById("localVideo");
+                    rtc.localVideoTrack.play(localVideo);
+                    localVideo.style.display = "block";
+
+                    // apply mirror/rotation immediately
+                    applyVideoTransform(localVideo, rtc.isFrontCamera);
+
+                    await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
+                    console.log("Organizer published audio/video tracks");
+
+                    // switch button attach
+                    const switchBtn = document.getElementById("switchCameraBtn");
+                    if (switchBtn) {
+                        if (rtc.cameras.length > 1) {
+                            switchBtn.disabled = false;
+                            switchBtn.addEventListener("click", switchCamera);
+                        } else {
+                            switchBtn.disabled = true;
+                            switchBtn.title = "Only one camera detected";
+                        }
+                    }
+                } catch (err) {
+                    console.error("Organizer media error:", err);
+                    alert("Failed to access camera/microphone for organizer.");
+                    const switchBtn = document.getElementById("switchCameraBtn");
+                    if (switchBtn) switchBtn.disabled = true;
+                }
+            } else {
+                await rtc.client.setClientRole("audience");
+                console.log("Viewer joined as audience");
+            }
+
+        } catch (err) {
+            console.error("initAgora error:", err);
+            alert(`Failed to initialize Agora: ${err.message}`);
+        }
+    }
+
+    function leaveChat() {
+        if (rtc.client) {
+            rtc.client.leave();
+            if (rtc.localAudioTrack) rtc.localAudioTrack.close();
+            if (rtc.localVideoTrack) rtc.localVideoTrack.close();
+            rtc.client = null;
+        }
+        if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) chatSocket.close();
+        if (likeSocket && likeSocket.readyState === WebSocket.OPEN) likeSocket.close();
+        if (rtmChannel) rtmChannel.leave().catch(()=>{});
+        if (rtmClient) rtmClient.logout().catch(()=>{});
+    }
+
+    function floatEmoji(content, isHeart = false) {
+        const el = document.createElement("div");
+        el.className = isHeart ? "float-emoji" : "float-emoji-alt";
+        el.innerText = content;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 4000);
+    }
+
+    function giftLabel(value) {
+        switch (value) {
+            case "10": return "🌹 Coin x10";
+            case "20": return "🍫 Coin x20";
+            case "50": return "⭐ Coin x50";
+            default: return `🎁 Coin x${value}`;
+        }
+    }
+
+    function approveMic(username) {
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
+        } else {
+            console.error("Chat WebSocket not connected for mic approval");
+            alert("Cannot approve mic: WebSocket not connected.");
+        }
+    }
+
+    function denyMic(username) {
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
+        } else {
+            console.error("Chat WebSocket not connected for mic denial");
+            alert("Cannot deny mic: WebSocket not connected.");
+        }
+    }
+
+    function revokeMic(username) {
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
+        } else {
+            console.error("Chat WebSocket not connected for mic revocation");
+            alert("Cannot revoke mic: WebSocket not connected.");
+        }
+    }
+
+    // reconnect helpers (kept similar to current)
+    function reconnectChatSocket(callback) {
+        let attempts = 0;
+        const maxAttempts = 5;
+        const retryInterval = 2000;
+        function tryConnect() {
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) { if (callback) callback(); return; }
             chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
-            chatSocket.onopen = () => {
-                console.log(`✅ Chat WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
-            };
+            chatSocket.onopen = () => { console.log(`✅ Chat WebSocket connected for event ${eventId}`); if (callback) callback(); };
             chatSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                console.log("📩 Chat WebSocket message:", data);
                 const chatArea = document.getElementById("chatArea");
                 if (data.type === "chat") {
                     const p = document.createElement("p");
@@ -437,7 +784,7 @@
                     const li = document.createElement("li");
                     li.id = `mic-${data.username}`;
                     li.innerHTML = `<button onclick="approveMic('${data.username}')">✅</button>
-                        <button onclick="denyMic('${data.username}')">❌</button>`;
+                                    <button onclick="denyMic('${data.username}')">❌</button>`;
                     document.getElementById("requestList")?.appendChild(li);
                 } else if (data.type === "mic_approved") {
                     if (!isOrganizer && data.username === user) {
@@ -449,10 +796,7 @@
                                 video.style.display = "block";
                                 floatEmoji("🎤🎥 You are live!", false);
                             })
-                            .catch(err => {
-                                console.error("Media access error:", err);
-                                alert("Could not access camera/microphone.");
-                            });
+                            .catch(err => { console.error("Media access error:", err); alert("Could not access camera/microphone."); });
                     } else {
                         document.getElementById(`mic-${data.username}`)?.remove();
                     }
@@ -472,27 +816,34 @@
             };
             chatSocket.onerror = (error) => {
                 console.error("❌ Chat WebSocket error:", error);
-                alert("Chat connection failed. Trying to reconnect...");
+                attempts++;
+                if (attempts < maxAttempts) setTimeout(tryConnect, retryInterval);
+                else alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
             };
             chatSocket.onclose = (event) => {
                 console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                if (event.code === 4001) {
-                    alert("Chat unavailable: Payment required for this conversation event.");
-                    window.location.href = "{% url 'pay_event' event.id %}";
-                } else if (event.code === 4000) {
-                    alert("Chat unavailable: Event does not exist.");
-                } else {
-                    setTimeout(reconnectChatSocket, 2000);
+                if (event.code === 4001) { alert("Chat unavailable: Payment required."); window.location.href = "{% url 'pay_event' event.id %}"; }
+                else if (event.code === 4000) { alert("Chat unavailable: Event does not exist."); }
+                else {
+                    attempts++;
+                    if (attempts < maxAttempts) setTimeout(tryConnect, retryInterval);
+                    else alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
                 }
             };
+        }
+        tryConnect();
+    }
 
+    function reconnectLikeSocket(callback) {
+        let attempts = 0;
+        const maxAttempts = 5;
+        const retryInterval = 2000;
+        function tryConnect() {
+            if (likeSocket && likeSocket.readyState === WebSocket.OPEN) { if (callback) callback(); return; }
             likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
-            likeSocket.onopen = () => {
-                console.log(`✅ Like WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
-            };
+            likeSocket.onopen = () => { console.log(`✅ Like WebSocket connected for event ${eventId}`); if (callback) callback(); };
             likeSocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                console.log("📩 Like WebSocket message:", data);
                 if (data.type === "like_update") {
                     document.getElementById("likeCount").innerText = data.total_likes;
                     floatEmoji("❤️", true);
@@ -512,475 +863,148 @@
             };
             likeSocket.onerror = (error) => {
                 console.error("❌ Like WebSocket error:", error);
+                attempts++;
+                if (attempts < maxAttempts) setTimeout(tryConnect, retryInterval);
+                else alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
             };
             likeSocket.onclose = (event) => {
                 console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                setTimeout(reconnectLikeSocket, 2000);
+                attempts++;
+                if (attempts < maxAttempts) setTimeout(tryConnect, retryInterval);
+                else alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
             };
         }
+        tryConnect();
+    }
 
-        /* 🔵 Added: Switch camera function for organizer */
-        async function switchCamera() {
-            try {
-                if (!rtc.localVideoTrack) {
-                    alert("Camera not ready yet.");
-                    return;
-                }
-                if (!rtc.cameras || rtc.cameras.length < 2) {
-                    alert("Only one camera detected.");
-                    return;
-                }
-                // Round-robin through available cameras
-                rtc.currentCameraIndex = (rtc.currentCameraIndex + 1) % rtc.cameras.length;
-                const nextDeviceId = rtc.cameras[rtc.currentCameraIndex].deviceId;
-
-                await rtc.localVideoTrack.setDevice(nextDeviceId);
-                console.log("🔄 Switched to:", rtc.cameras[rtc.currentCameraIndex].label || nextDeviceId);
-            } catch (err) {
-                console.error("Switch camera error:", err);
-                alert("Could not switch camera.");
-            }
+    // Onload setup
+    window.onload = () => {
+        if (isOrganizer || eventIsLive || hasPaid) {
+            initializeWebSockets();
+            initAgora().catch(()=>{});
+            initializeRTM().catch(()=>{}); // initialize RTM for viewer count & join-notices
         }
-
-        async function initAgora() {
-            if (rtc.client) return;
-            try {
-                const response = await fetch(`/get-agora-token/?event_id=${CHANNEL}`);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to fetch token: ${errorText}`);
-                }
-                const { token, uid, role } = await response.json();
-                console.log(`Agora Token: ${token}, UID: ${uid}, Role: ${role}`);
-                rtc.client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-                await rtc.client.join(APP_ID, CHANNEL, token, uid);
-
-                rtc.client.on("user-published", async (user, mediaType) => {
-                    try {
-                        await rtc.client.subscribe(user, mediaType);
-                        if (mediaType === "video") {
-                            const remoteVideo = document.getElementById("remoteVideo");
-                            user.videoTrack.play(remoteVideo);
-                            remoteVideo.style.display = "block";
-                            console.log("Subscribed to remote video track");
-                        }
-                        if (mediaType === "audio") {
-                            user.audioTrack.play();
-                            console.log("Subscribed to remote audio track");
-                        }
-                    } catch (err) {
-                        console.error("Subscription error:", err);
-                        alert(`Failed to subscribe to ${mediaType}: ${err.message}`);
-                    }
-                });
-                rtc.client.on("user-unpublished", (user, mediaType) => {
-                    if (mediaType === "video") {
-                        const remoteVideo = document.getElementById("remoteVideo");
-                        remoteVideo.style.display = "none";
-                        console.log("Remote video unpublished");
-                    }
-                });
-
-                if (isOrganizer) {
-                    await rtc.client.setClientRole("host");
-                    try {
-                        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-
-                        /* 🔵 Added: enumerate cameras first */
-                        rtc.cameras = await AgoraRTC.getCameras();
-                        // Prefer front camera if labels exist; otherwise index 0
-                        let initialIndex = 0;
-                        const frontIdx = rtc.cameras.findIndex(c =>
-                            (c.label || "").toLowerCase().includes("front") ||
-                            (c.label || "").toLowerCase().includes("user")
-                        );
-                        if (frontIdx >= 0) initialIndex = frontIdx;
-                        rtc.currentCameraIndex = Math.max(0, initialIndex);
-
-                        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-                            cameraId: rtc.cameras[rtc.currentCameraIndex]?.deviceId,
-                            encoderConfig: "720p_3" // keep your defaults; not changing behavior
-                        });
-
-                        const localVideo = document.getElementById("localVideo");
-                        rtc.localVideoTrack.play(localVideo);
-                        localVideo.style.display = "block";
-                        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-                        console.log("Organizer published audio/video tracks");
-
-                        // 🔵 Added: attach the switch button if present and enable only if >1 camera
-                        const switchBtn = document.getElementById("switchCameraBtn");
-                        if (switchBtn) {
-                            if (rtc.cameras.length > 1) {
-                                switchBtn.disabled = false;
-                                switchBtn.addEventListener("click", switchCamera);
-                            } else {
-                                switchBtn.disabled = true;
-                                switchBtn.title = "Only one camera detected";
-                            }
-                        }
-                    } catch (err) {
-                        console.error("Organizer media error:", err);
-                        alert("Failed to access camera/microphone for organizer.");
-                        // If we failed to create video track, disable switch button to avoid confusion
-                        const switchBtn = document.getElementById("switchCameraBtn");
-                        if (switchBtn) switchBtn.disabled = true;
-                    }
-                } else {
-                    await rtc.client.setClientRole("audience");
-                    console.log("Viewer joined as audience");
-                }
-            } catch (err) {
-                console.error("initAgora error:", err);
-                alert(`Failed to initialize Agora: ${err.message}`);
-            }
-        }
-
-        function leaveChat() {
-            if (rtc.client) {
-                rtc.client.leave();
-                if (rtc.localAudioTrack) rtc.localAudioTrack.close();
-                if (rtc.localVideoTrack) rtc.localVideoTrack.close();
-            }
-            if (socket && socket.readyState === WebSocket.OPEN) socket.close();
-            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) chatSocket.close();
-            if (likeSocket && likeSocket.readyState === WebSocket.OPEN) likeSocket.close();
-        }
-
-        function floatEmoji(content, isHeart = false) {
-            const el = document.createElement("div");
-            el.className = isHeart ? "float-emoji" : "float-emoji-alt";
-            el.innerText = content;
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 4000);
-        }
-
-        function giftLabel(value) {
-            switch (value) {
-                case "10": return "🌹 Coin x10";
-                case "20": return "🍫 Coin x20";
-                case "50": return "⭐ Coin x50";
-                default: return `🎁 Coin x${value}`;
-            }
-        }
-
-        function approveMic(username) {
-            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                chatSocket.send(JSON.stringify({ type: "mic_approved", username }));
-            } else {
-                console.error("Chat WebSocket not connected for mic approval");
-                alert("Cannot approve mic: WebSocket not connected.");
-            }
-        }
-
-        function denyMic(username) {
-            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                chatSocket.send(JSON.stringify({ type: "mic_denied", username }));
-            } else {
-                console.error("Chat WebSocket not connected for mic denial");
-                alert("Cannot deny mic: WebSocket not connected.");
-            }
-        }
-
-        function revokeMic(username) {
-            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                chatSocket.send(JSON.stringify({ type: "mic_revoked", username }));
-            } else {
-                console.error("Chat WebSocket not connected for mic revocation");
-                alert("Cannot revoke mic: WebSocket not connected.");
-            }
-        }
-
-        function reconnectChatSocket(callback) {
-            let attempts = 0;
-            const maxAttempts = 5;
-            const retryInterval = 2000;
-
-            function tryConnect() {
-                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                    console.log("✅ Chat WebSocket already connected");
-                    if (callback) callback();
-                    return;
-                }
-
-                chatSocket = new WebSocket(`${wsScheme}://${location.host}/ws/chat/${eventId}/`);
-                chatSocket.onopen = () => {
-                    console.log(`✅ Chat WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
-                    if (callback) callback();
-                };
-                chatSocket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log("📩 Chat WebSocket message:", data);
-                    const chatArea = document.getElementById("chatArea");
-                    if (data.type === "chat") {
-                        const p = document.createElement("p");
-                        const isOwnMessage = data.username === user;
-                        p.className = isOwnMessage ? "own-message" : "";
-                        p.innerHTML = `<strong>@${data.username}</strong>: ${data.message}`;
-                        chatArea.appendChild(p);
-                        chatArea.scrollTop = chatArea.scrollHeight;
-                    } else if (data.type === "mic_request" && isOrganizer) {
-                        const li = document.createElement("li");
-                        li.id = `mic-${data.username}`;
-                        li.innerHTML = `<button onclick="approveMic('${data.username}')">✅</button>
-                            <button onclick="denyMic('${data.username}')">❌</button>`;
-                        document.getElementById("requestList")?.appendChild(li);
-                    } else if (data.type === "mic_approved") {
-                        if (!isOrganizer && data.username === user) {
-                            navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-                                .then(stream => {
-                                    localMicStream = stream;
-                                    const video = document.getElementById("remoteVideo");
-                                    video.srcObject = stream;
-                                    video.style.display = "block";
-                                    floatEmoji("🎤🎥 You are live!", false);
-                                })
-                                .catch(err => {
-                                    console.error("Media access error:", err);
-                                    alert("Could not access camera/microphone.");
-                                });
-                        } else {
-                            document.getElementById(`mic-${data.username}`)?.remove();
-                        }
-                    } else if (data.type === "mic_denied") {
-                        if (data.username === user) alert("❌ Your mic request was denied.");
-                        document.getElementById(`mic-${data.username}`)?.remove();
-                    } else if (data.type === "mic_revoked" && data.username === user) {
-                        if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
-                        localMicStream = null;
-                        const video = document.getElementById("remoteVideo");
-                        video.srcObject = null;
-                        video.style.display = "none";
-                        alert("🔇 Your mic/video access was revoked.");
-                    } else if (data.type === "mute_user" && data.username === user) {
-                        alert("🔇 You have been muted by the organizer.");
-                    }
-                };
-                chatSocket.onerror = (error) => {
-                    console.error("❌ Chat WebSocket error:", error);
-                    attempts++;
-                    if (attempts < maxAttempts) {
-                        console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
-                        setTimeout(tryConnect, retryInterval);
-                    } else {
-                        console.error("❌ Max retry attempts reached for Chat WebSocket");
-                        alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
-                    }
-                };
-                chatSocket.onclose = (event) => {
-                    console.warn(`⚠️ Chat WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                    if (event.code === 4001) {
-                        alert("Chat unavailable: Payment required for this conversation event.");
-                        window.location.href = "{% url 'pay_event' event.id %}";
-                    } else if (event.code === 4000) {
-                        alert("Chat unavailable: Event does not exist.");
-                    } else {
-                        attempts++;
-                        if (attempts < maxAttempts) {
-                            console.log(`🔄 Retrying Chat WebSocket connection (${attempts}/${maxAttempts})`);
-                            setTimeout(tryConnect, retryInterval);
-                        } else {
-                            console.error("❌ Max retry attempts reached for Chat WebSocket");
-                            alert("Failed to connect to chat after multiple attempts. Please refresh the page or verify payment.");
-                        }
-                    }
-                };
-            }
-            tryConnect();
-        }
-
-        function reconnectLikeSocket(callback) {
-            let attempts = 0;
-            const maxAttempts = 5;
-            const retryInterval = 2000;
-
-            function tryConnect() {
-                if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
-                    console.log("✅ Like WebSocket already connected");
-                    if (callback) callback();
-                    return;
-                }
-
-                likeSocket = new WebSocket(`${wsScheme}://${location.host}/ws/event/${eventId}/`);
-                likeSocket.onopen = () => {
-                    console.log(`✅ Like WebSocket connected for event ${eventId} (isLive: ${eventIsLive}, hasPaid: ${hasPaid})`);
-                    if (callback) callback();
-                };
-                likeSocket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log("📩 Like WebSocket message:", data);
-                    if (data.type === "like_update") {
-                        document.getElementById("likeCount").innerText = data.total_likes;
-                        floatEmoji("❤️", true);
-                    } else if (data.type === "reaction") {
-                        floatEmoji(data.emoji, data.emoji === "❤️");
-                    } else if (data.type === "gift") {
-                        const p = document.createElement("p");
-                        p.textContent = `🎁 ${data.user} sent ${giftLabel(data.gift)}`;
-                        p.style.color = "orange";
-                        p.className = data.user === user ? "own-message" : "";
-                        document.getElementById("chatArea")?.appendChild(p);
-                        floatEmoji(`🎁 ${data.user} sent ${giftLabel(data.gift)}`, false);
-                    } else if (data.type === "live_started") {
-                        document.getElementById("videoPlaceholder")?.remove();
-                        initAgora();
-                    }
-                };
-                likeSocket.onerror = (error) => {
-                    console.error("❌ Like WebSocket error:", error);
-                    attempts++;
-                    if (attempts < maxAttempts) {
-                        console.log(`🔄 Retrying Like WebSocket connection (${attempts}/${maxAttempts})`);
-                        setTimeout(tryConnect, retryInterval);
-                    } else {
-                        console.error("❌ Max retry attempts reached for Like WebSocket");
-                        alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
-                    }
-                };
-                likeSocket.onclose = (event) => {
-                    console.warn(`⚠️ Like WebSocket closed: code=${event.code}, reason=${event.reason}`);
-                    attempts++;
-                    if (attempts < maxAttempts) {
-                        console.log(`🔄 Retrying Like WebSocket connection (${attempts}/${maxAttempts})`);
-                        setTimeout(tryConnect, retryInterval);
-                    } else {
-                        console.error("❌ Max retry attempts reached for Like WebSocket");
-                        alert("Failed to connect to reactions after multiple attempts. Please refresh the page.");
-                    }
-                };
-            }
-            tryConnect();
-        }
-
-        window.onload = () => {
-            if (isOrganizer || eventIsLive || hasPaid) {
-                initializeWebSockets();
-                initAgora();
-            }
-            const tabs = document.querySelectorAll(".tab");
-            const tabContents = document.querySelectorAll(".tab-content");
-            tabs.forEach(tab => {
-                tab.addEventListener("click", () => {
-                    tabContents.forEach(content => content.classList.remove("active"));
-                    tabs.forEach(t => t.classList.remove("active"));
-                    const target = tab.getAttribute("data-target");
-                    if (target) {
-                        document.getElementById(target).classList.add("active");
-                        tab.classList.add("active");
-                    }
-                });
-            });
-            const reactionsTab = document.querySelector(".tab[data-target='reactions']");
-            if (reactionsTab) {
-                document.getElementById("reactions").classList.add("active");
-                reactionsTab.classList.add("active");
-            }
-
-            /* 🔵 Added: If the button exists at load but Agora hasn't initialized yet, keep it disabled.
-               It will be enabled inside initAgora when cameras are enumerated. */
-            const switchBtn = document.getElementById("switchCameraBtn");
-            if (switchBtn) {
-                switchBtn.disabled = true;
-                switchBtn.title = "Initializing camera…";
-            }
-        };
-
-        document.querySelectorAll(".reaction-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const emoji = btn.getAttribute("data-emoji");
-                const isHeart = btn.getAttribute("data-is-heart") === "true";
-                if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
-                    if (isHeart) {
-                        likeSocket.send(JSON.stringify({
-                            type: "like_update",
-                            action: liked ? "unlike" : "like",
-                            event_id: eventId
-                        }));
-                        liked = !liked;
-                        btn.classList.toggle("liked-btn", liked);
-                    } else {
-                        likeSocket.send(JSON.stringify({
-                            type: "reaction",
-                            emoji: emoji,
-                            event_id: eventId
-                        }));
-                    }
-                    floatEmoji(emoji, isHeart);
-                } else {
-                    console.error("Like WebSocket not connected, attempting to reconnect");
-                    alert("Reactions WebSocket not connected, attempting to reconnect...");
-                    reconnectLikeSocket(() => {
-                        if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
-                            if (isHeart) {
-                                likeSocket.send(JSON.stringify({
-                                    type: "like_update",
-                                    action: liked ? "unlike" : "like",
-                                    event_id: eventId
-                                }));
-                                liked = !liked;
-                                btn.classList.toggle("liked-btn", liked);
-                            } else {
-                                likeSocket.send(JSON.stringify({
-                                    type: "reaction",
-                                    emoji: emoji,
-                                    event_id: eventId
-                                }));
-                            }
-                            floatEmoji(emoji, isHeart);
-                        } else {
-                            console.error("Failed to reconnect Like WebSocket");
-                            alert("Failed to send reaction: Unable to reconnect to reactions.");
-                        }
-                    });
+        // tabs
+        const tabs = document.querySelectorAll(".tab");
+        const tabContents = document.querySelectorAll(".tab-content");
+        tabs.forEach(tab => {
+            tab.addEventListener("click", () => {
+                tabContents.forEach(content => content.classList.remove("active"));
+                tabs.forEach(t => t.classList.remove("active"));
+                const target = tab.getAttribute("data-target");
+                if (target) {
+                    document.getElementById(target).classList.add("active");
+                    tab.classList.add("active");
                 }
             });
         });
+        const reactionsTab = document.querySelector(".tab[data-target='reactions']");
+        if (reactionsTab) {
+            document.getElementById("reactions").classList.add("active");
+            reactionsTab.classList.add("active");
+        }
 
-        document.getElementById("sendBtn")?.addEventListener("click", () => {
-            const msg = document.getElementById("messageInput")?.value.trim();
-            if (msg) {
-                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                    chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-                    document.getElementById("messageInput").value = "";
-                    console.log(`📤 Sent message: ${msg}`);
+        // Switch camera button disabled by default until camera list loaded
+        const switchBtn = document.getElementById("switchCameraBtn");
+        if (switchBtn) {
+            switchBtn.disabled = true;
+            switchBtn.title = "Initializing camera…";
+        }
+
+        // handle orientation changes to keep video right-side-up
+        function handleOrientationChange() {
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (localVideo && localVideo.style.display !== 'none') applyVideoTransform(localVideo, rtc.isFrontCamera);
+            if (remoteVideo && remoteVideo.style.display !== 'none') applyVideoTransform(remoteVideo, false);
+        }
+        if ('onorientationchange' in window) window.addEventListener('orientationchange', handleOrientationChange);
+        if (screen && screen.orientation && screen.orientation.addEventListener) {
+            try { screen.orientation.addEventListener('change', handleOrientationChange); } catch(e) {}
+        }
+    };
+
+    // Reaction buttons
+    document.querySelectorAll(".reaction-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const emoji = btn.getAttribute("data-emoji");
+            const isHeart = btn.getAttribute("data-is-heart") === "true";
+            if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
+                if (isHeart) {
+                    likeSocket.send(JSON.stringify({
+                        type: "like_update",
+                        action: liked ? "unlike" : "like",
+                        event_id: eventId
+                    }));
+                    liked = !liked;
+                    btn.classList.toggle("liked-btn", liked);
                 } else {
-                    console.error("Chat WebSocket not connected, attempting to reconnect");
-                    alert("Chat WebSocket not connected, attempting to reconnect...");
-                    reconnectChatSocket(() => {
-                        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                            chatSocket.send(JSON.stringify({ type: "message", message: msg }));
-                            document.getElementById("messageInput").value = "";
-                            console.log(`📤 Sent message after reconnect: ${msg}`);
-                        } else {
-                            console.error("Failed to reconnect Chat WebSocket");
-                            alert("Failed to send message: Unable to reconnect to chat. Please refresh the page or verify payment.");
-                        }
-                    });
+                    likeSocket.send(JSON.stringify({ type: "reaction", emoji: emoji, event_id: eventId }));
                 }
+                floatEmoji(emoji, isHeart);
+            } else {
+                alert("Reactions WebSocket not connected, attempting to reconnect...");
+                reconnectLikeSocket(() => {
+                    if (likeSocket && likeSocket.readyState === WebSocket.OPEN) {
+                        if (isHeart) {
+                            likeSocket.send(JSON.stringify({ type: "like_update", action: liked ? "unlike" : "like", event_id: eventId }));
+                            liked = !liked;
+                            btn.classList.toggle("liked-btn", liked);
+                        } else {
+                            likeSocket.send(JSON.stringify({ type: "reaction", emoji: emoji, event_id: eventId }));
+                        }
+                        floatEmoji(emoji, isHeart);
+                    } else {
+                        alert("Failed to send reaction: Unable to reconnect to reactions.");
+                    }
+                });
             }
         });
+    });
 
-        document.getElementById("messageInput")?.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") document.getElementById("sendBtn")?.click();
-        });
-
-        document.getElementById("leaveChatBtn")?.addEventListener("click", () => {
-            leaveChat();
-            window.location.href = "{% url 'landing' %}";
-        });
-
-        const micBtn = document.getElementById("requestMicBtn");
-        if (micBtn) {
-            micBtn.addEventListener("click", () => {
-                if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                    chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
-                    alert("🎤 Mic request sent to organizer.");
-                } else {
-                    console.error("Chat WebSocket not connected for mic request");
-                    alert("Cannot send mic request: WebSocket not connected.");
-                }
-            });
+    // Chat send
+    document.getElementById("sendBtn")?.addEventListener("click", () => {
+        const msgEl = document.getElementById("messageInput");
+        const msg = msgEl?.value.trim();
+        if (msg) {
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+                msgEl.value = "";
+            } else {
+                alert("Chat disconnected, attempting to reconnect...");
+                reconnectChatSocket(() => {
+                    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                        chatSocket.send(JSON.stringify({ type: "message", message: msg }));
+                        msgEl.value = "";
+                    } else {
+                        alert("Failed to send message: Unable to reconnect to chat.");
+                    }
+                });
+            }
         }
-    </script>
+    });
+
+    document.getElementById("messageInput")?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") document.getElementById("sendBtn")?.click();
+    });
+
+    document.getElementById("leaveChatBtn")?.addEventListener("click", () => {
+        leaveChat();
+        window.location.href = "{% url 'landing' %}";
+    });
+
+    // request mic button handler (if present in DOM)
+    const micBtn = document.getElementById("requestMicBtn");
+    if (micBtn) {
+        micBtn.addEventListener("click", () => {
+            if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({ type: "mic_request", username: user }));
+                alert("🎤 Mic request sent to organizer.");
+            } else {
+                alert("Cannot send mic request: WebSocket not connected.");
+            }
+        });
+    }
+</script>
 </body>
 </html>
