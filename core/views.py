@@ -433,13 +433,14 @@ def initiate_paystack_payment(request, event_id):
 
     # Create unique reference
     reference = str(uuid.uuid4())
+    event_fee = event.fee
 
     # Create Payment record with verified=False
     payment = Payment.objects.create(
         user=request.user,
         event=event,
         reference=reference,
-        amount=60  # Fixed price in KES
+        amount=event_fee  # Fixed price in KES
     )
 
     callback_url = request.build_absolute_uri(
@@ -830,6 +831,7 @@ def business_model_view(request):
         ]
     }
     return render(request, "business_model.html", context)
+
 
 
 
