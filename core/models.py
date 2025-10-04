@@ -29,6 +29,12 @@ class Event(models.Model):
     likes = models.ManyToManyField(User, related_name='liked_events', blank=True)
     mux_stream_key = models.CharField(max_length=255, null=True, blank=True)
     mux_playback_id = models.CharField(max_length=255, null=True, blank=True)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=70)
+
+    def clean(self):
+        """Ensure the fee is not less than 70."""
+        if self.fee < 70:
+            raise ValidationError("The event fee cannot be less than 70.")
     def total_likes(self):
         return self.likes.count()
 
@@ -120,3 +126,4 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+
