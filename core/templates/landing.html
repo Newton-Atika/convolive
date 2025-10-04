@@ -442,7 +442,7 @@
                             <p><strong>By:</strong> {{ event.organizer.username }}</p>
                             <p><strong>Started:</strong> {{ event.start_time|date:"F d, Y, h:i a" }}</p>
                             <div class="event-actions">
-                                <a href="{% url 'join_event' event.id %}" class="join-btn">Join</a>
+                                <a href="{% url 'join_event' event.id %}" class="join-btn">Join {{ event.title }}</a>
                                 <div class="event-stats">
                                     <span>👁️ {{ event.viewer_count }}</span>
                                 </div>
@@ -574,6 +574,7 @@
     </script>
 </body>
 </html>
+
 
 
 
