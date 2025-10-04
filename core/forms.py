@@ -13,7 +13,7 @@ class CustomUserCreationForm(UserCreationForm):
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
-        fields = ['title', 'start_time', 'is_live']
+        fields = ['title', 'start_time', 'is_live', 'fee']  # ✅ added 'fee'
         widgets = {
             'start_time': forms.DateTimeInput(
                 attrs={
@@ -29,8 +29,18 @@ class EventForm(forms.ModelForm):
             'title': forms.TextInput(
                 attrs={'style': 'background-color: #000; color: #fff; border: 1px solid #fff;'}
             ),
+            'fee': forms.NumberInput(
+                attrs={
+                    'min': '0',
+                    'step': '0.01',
+                    'class': 'form-control',
+                    'placeholder': 'Enter event fee (e.g., 500)',
+                    'style': 'background-color: #000; color: #fff; border: 1px solid #fff;'
+                }
+            ),
         }
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['start_time'].label = 'Start Time (EAT, Nairobi)'
+        self.fields['fee'].label = 'Event Fee (KES)'
