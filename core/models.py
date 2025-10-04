@@ -20,6 +20,7 @@ from django.contrib.auth.models import User
 
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Cast
+from django.core.exceptions import ValidationError
 
 class Event(models.Model):
     title = models.CharField(max_length=255)
@@ -126,4 +127,5 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+
 
